@@ -22,7 +22,7 @@ Solution: every actionable result becomes a **case** in a strict lifecycle. Each
 Principle: **AI helps prioritize and communicate; the workflow engine guarantees accountability.**
 No autonomous clinical decisions, ever.
 
-**Time box:** 20 days, solo developer. Start date: ____ . Submission date: ____ .
+**Time box:** 20 days, solo developer. Start date: 3-11-2026. Submission date: 20-11-2026 .
 
 **Required submission:** (1) working prototype, (2) technical documentation, (3) clear statement of
 assumptions, dependencies and limitations.
