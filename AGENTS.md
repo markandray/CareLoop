@@ -1,0 +1,289 @@
+# AGENTS.md — CareLoop project context (single source of truth)
+
+> Every AI agent/model MUST read this file fully at the start of each session, then read `TASKS.md`.
+> Before ending a session: update `TASKS.md` statuses, the Progress log (section 14) and the Decisions log (section 15).
+> The human owner is a solo student developer who must be able to explain and defend every design decision
+> to judges. Do not make silent architectural changes. When unsure, ask.
+
+## 1. Product
+
+**CareLoop** — a screening-to-care coordination platform.
+Challenge: *Future Health Digital Innovation Challenge (Abu Dhabi), Challenge 05: Closing the Screening-to-Care Loop.*
+
+Problem: screening programs find actionable results, but patients get lost between notification, consultation,
+confirmation, referral, appointment and follow-up, across providers.
+
+Solution: every actionable result becomes a **case** in a strict lifecycle. Each case always answers four questions:
+1. What happened to the result?
+2. What must happen next?
+3. Who is responsible for it?
+4. Has the required action actually been completed?
+
+Principle: **AI helps prioritize and communicate; the workflow engine guarantees accountability.**
+No autonomous clinical decisions, ever.
+
+**Time box:** 20 days, solo developer. Start date: ____ . Submission date: ____ .
+
+**Required submission:** (1) working prototype, (2) technical documentation, (3) clear statement of
+assumptions, dependencies and limitations.
+
+## 2. Challenge requirements -> CareLoop features
+
+| Challenge requirement | CareLoop feature |
+|---|---|
+| End-to-end case visibility | Case timeline built from an append-only event log (issue -> notify -> acknowledge -> confirm -> referral -> appointment -> care -> closure) |
+| Clear ownership, timely progression | Exactly one owner and one `dueAt` per open case; overdue / unassigned / rejected cases surface in an attention queue |
+| Patient-centered communication | Patient portal: plain-language explanation, urgency label, status tracker, "I understand" acknowledgement; English + Arabic (RTL) |
+| Cross-provider consultation and coordination | Provider organizations, referrals that move between providers (accept / reject / reassign), consult requests (patient->clinician, clinician->clinician) |
+| Safe, human-governed escalation | Escalation overlay routes to a human queue; closure only with evidence or authorized clinician sign-off |
+| Closure and impact measures | Analytics dashboard + synthetic-cohort simulation comparing baseline (no tracking) vs CareLoop |
+
+## 3. Scope
+
+**In scope (MVP)**
+1. Screening case management (synthetic patients/results; clinician approves interpretation and next step)
+2. Patient notifications (in-app outbox) and acknowledgement
+3. Referrals, appointments, contact attempts, delay reasons, follow-ups, consults
+4. Explainable rules-based attention/priority engine (operational, NOT clinical)
+5. Plain-language result explanation (template-first, clinician-approved before patient sees it)
+6. Admin analytics dashboard + synthetic cohort simulation
+7. Four roles: PATIENT, DOCTOR, COORDINATOR, ADMIN
+8. Audit trail, consent record, role-based access
+9. English + Arabic (RTL) on the patient portal
+
+**Out of scope — document in Limitations, do not build**
+Real hospital/lab/EHR integration; real patient data; disease or clinical-risk prediction; ML follow-up
+prediction; mobile app; video consultation; blockchain; WebSockets; Redis; Kafka; microservices; real
+SMS/WhatsApp/email delivery; autonomous clinical decisions (prohibited).
+
+## 4. Tech stack (locked unless a decision is logged in section 15)
+
+- Monorepo, npm workspaces: `client/` (UI), `server/` (API), `shared/` (TypeScript types + zod schemas used by both), `docs/`
+- **Frontend:** Next.js + TypeScript + Tailwind CSS, i18n (en, ar) with RTL, used as a UI client calling the REST API
+- **Backend:** Node.js + Express + TypeScript, REST, zod request validation
+- **Database:** PostgreSQL + Prisma
+- **Auth:** email/password, bcrypt, JWT in httpOnly cookie, role middleware, seeded demo accounts
+- **Updates:** polling / refetch. No WebSockets.
+- **Tests:** Vitest (unit + integration); Playwright for one end-to-end run of the demo scenario
+- **Infra:** Docker Compose (db, server, client), `.env.example`, one-command local run, one hosted demo
+- **AI layer:** TypeScript only. LLM (optional) sits behind an `ExplanationProvider` interface. No Python service.
+
+## 5. Architecture
+
+Modular monolith. Controller -> service -> data access (Prisma) in every module.
+
+```
+careloop/
+├── client/                 # Next.js UI (patient, doctor, coordinator, admin)
+├── server/
+│   ├── prisma/schema.prisma
+│   └── src/
+│       ├── config/
+│       ├── middleware/     # auth, role, validate, error
+│       ├── core/           # clock, stateMachine, eventLog, audit
+│       ├── modules/
+│       │   ├── auth/  patients/  cases/  referrals/  appointments/
+│       │   ├── notifications/  consults/  followups/  consent/
+│       │   ├── attention/       # rules-based prioritization
+│       │   ├── explanation/     # template + optional LLM provider
+│       │   ├── analytics/  simulation/  demo/
+│       ├── app.ts
+│       └── server.ts
+├── shared/                 # types, enums, zod schemas (API contract)
+├── docs/
+├── AGENTS.md  TASKS.md  README.md  docker-compose.yml
+```
+
+### Architecture principles (non-negotiable)
+1. **Event log is the source of truth.** One append-only `CaseEvent` table is both the patient-visible timeline and the audit record. Never update or delete events.
+2. **One state machine module.** All allowed transitions, who may trigger them, and required evidence live in `core/stateMachine.ts` as a table. No code changes `case.state` except through it. Invalid transitions are rejected and tested.
+3. **One owner at a time.** Every open case has an owner (user or role queue) and `dueAt`. Unowned = attention alert.
+4. **Closure requires evidence** or an authorized clinician decision. Never auto-close; never close on a bare button click.
+5. **Overdue is computed at query time** (`dueAt < clock.now()`), not by timers. A small periodic job only writes escalation events.
+6. **Injectable clock.** All time comes from `core/clock.ts`. Admin demo controls can advance simulated time so the overdue scenario is demonstrable and repeatable in seconds.
+7. **Escalation is an overlay, not a state.** A case keeps its workflow state and gets `escalationLevel` + an event, and appears in a human queue.
+8. **Privacy by design.** Role-scoped queries on the server (never trust the client), notifications contain no clinical detail, reads of patient detail are audited, cross-provider sharing requires a consent record.
+9. **Config over code** for SLA durations, message templates and attention rules.
+
+## 6. Case lifecycle (illustrative workflow, not a universal clinical pathway)
+
+Workflow states (Prisma enum `CaseState`):
+
+| State | Owner | Default SLA (illustrative) | Next states | Required to leave |
+|---|---|---|---|---|
+| NEW | Assigned doctor | 48 h to review | CLINICIAN_REVIEWED | Doctor approves result summary + next step + urgency label |
+| CLINICIAN_REVIEWED | Coordinator | 24 h to notify (auto on approval) | CONFIRMATION_PENDING, REFERRAL_PENDING, CLOSED | Notification sent; route chosen by doctor |
+| CONFIRMATION_PENDING | Doctor | 7 d | REFERRAL_PENDING, CLOSED | Confirmatory result recorded |
+| REFERRAL_PENDING | Coordinator | 3 d for provider to accept | REFERRAL_ACCEPTED, (reassign stays in state) | Receiving provider accepts; rejection forces reassign or escalation |
+| REFERRAL_ACCEPTED | Coordinator | 7 d to schedule | APPOINTMENT_SCHEDULED | Appointment date recorded |
+| APPOINTMENT_SCHEDULED | Coordinator | until appointment + 2 d | CARE_STARTED, APPOINTMENT_SCHEDULED (reschedule) | Attendance or non-attendance recorded |
+| CARE_STARTED | Receiving clinician | follow-up date | CLOSED | Treatment or surveillance plan documented |
+| CLOSED | — | — | — | — |
+
+Closure reasons (`ClosureReason`): COMPLETED_CARE, NOT_CONFIRMED, PATIENT_DECLINED, UNREACHABLE_AFTER_ATTEMPTS, TRANSFERRED_OUT.
+- COMPLETED_CARE requires an evidence record (attended appointment / care plan).
+- Every other reason requires a documented reason **and** clinician sign-off.
+
+Parallel facts tracked as timestamps, not states: `notifiedAt`, `acknowledgedAt`. A patient who does not
+acknowledge does NOT block clinical progress, but becomes an attention reason.
+
+Exception rules:
+- Referral rejected -> referral status REJECTED, case stays REFERRAL_PENDING, must be reassigned to another provider or escalated.
+- Patient unreachable -> contact attempts logged (`ContactAttempt`); after N failed attempts (config) -> escalate; closure only via UNREACHABLE_AFTER_ATTEMPTS with sign-off.
+- Missed appointment -> reschedule or escalate; delay reason is mandatory.
+
+SLA numbers are illustrative configuration, not clinical standards. Say so in the docs.
+
+## 7. Data model (Prisma entities; refine in Phase 0 then freeze)
+
+| Entity | Key fields / purpose |
+|---|---|
+| User | id, email, passwordHash, role, name, providerId?, language |
+| Provider | id, name, type (screening centre, hospital, clinic) |
+| Patient | id, userId, syntheticMrn, dateOfBirth, preferredLanguage, preferredChannel |
+| ScreeningCase | id (CL-####), patientId, pathway, screeningType, resultCategory, resultSummaryApproved, recommendedNextStep, urgencyLabel (clinician-set), state, ownerUserId?, ownerRole?, dueAt, notifiedAt?, acknowledgedAt?, escalationLevel, closureReason?, closedAt?, createdAt |
+| CaseEvent | id, caseId, type, fromState?, toState?, actorId, payload json, createdAt (append-only) |
+| Evidence | id, caseId, kind, recordedBy, details json, createdAt |
+| Referral | id, caseId, fromProviderId, toProviderId, status (PENDING/ACCEPTED/REJECTED), rejectionReason?, createdAt |
+| Appointment | id, referralId, scheduledAt, status (SCHEDULED/ATTENDED/MISSED/RESCHEDULED) |
+| ContactAttempt | id, caseId, byUserId, channel, outcome, notes, createdAt |
+| FollowUp | id, caseId, action, dueAt, status, ownerId |
+| Consult | id, caseId, requesterId, targetUserId, kind (PATIENT_TO_CLINICIAN / CLINICIAN_TO_CLINICIAN), question, response?, status |
+| Notification | id, caseId, userId, channel, language, templateKey, status, createdAt (mock outbox; no clinical detail) |
+| ExplanationDraft | id, caseId, language, text, source (TEMPLATE/LLM), status (DRAFT/APPROVED), approvedBy? |
+| Consent | id, patientId, scope, grantedAt, revokedAt? |
+| AuditLog | id, actorId, action, entityType, entityId, createdAt (includes sensitive reads) |
+
+## 8. Intelligence layer
+
+### 8.1 Attention / priority engine (rules-based, explainable)
+Predicts **operational drop-off risk, not clinical severity**. Always label it: *"Operational workflow rule, not a clinical risk assessment."*
+Rules (configurable, each returns a reason string): unassigned case; notification not acknowledged after X h;
+referral pending longer than SLA; appointment overdue or missed; follow-up deadline missed; rejected referral not reassigned;
+repeated unreachable patient. Output: `attentionLevel` (LOW/MEDIUM/HIGH), list of reasons, suggested operational action.
+No ML. Do not add ML unless a decision is logged.
+
+### 8.2 Result explanation (patient-facing)
+- Input is ONLY structured, clinician-approved fields (result category, approved summary, next step, urgency label). Never raw data, never free diagnosis.
+- Default generator = deterministic localized templates (en/ar). Works with no API key.
+- Optional LLM rewrite behind `ExplanationProvider`. Constrained prompt; output must not add diagnoses, drugs, doses, numbers or advice not present in the input; run a simple validator; on failure fall back to the template.
+- Saved as `ExplanationDraft`; **a clinician approves before the patient can see it**. Patient sees: explanation, next step, limitations, "this does not replace your clinician".
+- Arabic text is machine/template-generated and NOT clinically reviewed: state this in Limitations.
+
+### 8.3 Simulation and analytics
+- Seeded random generator creates ~3,000-5,000 synthetic cases across language groups (en, ar, other).
+- Compare **baseline** (no tracking: drop-off probability at each hand-off) vs **CareLoop** (stuck cases detected and recovered after SLA breach).
+- All probabilities are documented assumptions, NOT empirical. Results show the mechanism's potential, not real-world effect sizes. Say this in `docs/` and on the results page.
+- Metrics: time to notification, time to acknowledgement, time to confirmation, time to referral acceptance, appointment completion %, referral completion %, treatment/surveillance initiation %, unresolved actionable cases, documented closure %, delay reasons, breakdown by language group. Dashboard shows live values from the DB; the simulation page shows the cohort comparison.
+
+## 9. Safety, privacy and ethics rules
+
+1. AI never makes or changes clinical decisions. Clinicians approve summaries, next steps and closures.
+2. Operational priority is never presented as clinical urgency. Use different labels and colors.
+3. All data is synthetic. No real personal data in the repo, logs, screenshots or prompts.
+4. Role-based access enforced on the server for every endpoint; patients see only their own cases; cross-provider access needs consent.
+5. Notifications and logs never contain diagnosis details.
+6. Audit every state change and every read of patient detail.
+7. Never expose passwords, tokens or API keys. Secrets only in `.env`.
+8. Clinical-sounding text is placeholder content; flag it for human review. Never invent medical guidance.
+9. Never claim the prototype is clinically validated.
+
+## 10. Roles and agent workflow
+
+| Who | Responsibility |
+|---|---|
+| **Owner (human)** | Scope, architecture and schema approval, branch review and merge, running the app, validating workflows, demo and docs ownership |
+| **Codex (primary)** | Server, Prisma, auth/RBAC, state machine, workflows, tests, bug fixing |
+| **Antigravity (secondary)** | Client UI, dashboards, i18n/RTL, browser verification, Playwright flows, UX review |
+| **Claude (reviewer, in chat)** | Spec review, prompt review (hallucination/safety), docs review, test-scenario ideas |
+
+Rules for every agent:
+1. Read AGENTS.md and TASKS.md first. Work only on tasks in TASKS.md. New ideas go to the Backlog, not into code.
+2. One task = one branch (`task/T-xxx-short-name`) = one PR-sized change. Never two agents on the same files at once.
+3. Contract first: API shapes and enums live in `shared/` and `docs/05-API-Documentation.md` before either side implements them.
+4. Tests first for state machine, permissions and rules. Run the relevant tests and include the real output in your report.
+5. Never claim something works unless you ran it. List anything untested.
+6. Do not add dependencies, change the stack, schema or lifecycle without asking; log approved changes in section 15.
+7. Keep `docker compose up` working on `main` at all times.
+8. Explain non-obvious choices in comments and in `docs/`, in plain language.
+9. Draft the matching `docs/` section as you finish each feature.
+10. End each task with: what changed, how to run it, what is untested, what is next.
+
+Code quality: validate every request with zod; consistent error format; no unnecessary abstractions; TypeScript strict; no `any` without a comment.
+
+## 11. Documentation deliverables (`docs/`, written continuously)
+
+```
+docs/
+├── 01-Problem-Statement.md
+├── 02-Product-Requirements.md
+├── 03-System-Architecture.md
+├── 04-Database-Design.md
+├── 05-API-Documentation.md      # the contract
+├── 06-AI-Design.md              # rules engine, explanation service, safety, simulation method
+├── 07-Testing-and-Validation.md # test evidence, simulation results, fairness by language
+├── 08-Assumptions-Dependencies-Limitations.md   # REQUIRED by the challenge
+└── 09-Setup-and-Deployment.md
+```
+
+`08` must state honestly:
+- **Assumptions:** synthetic data; simulated providers/labs; clinicians enter or approve clinical content; results already exist; notifications simulated; SLA values illustrative; workflow is a proposal, not a clinical protocol.
+- **Dependencies:** Node.js/npm, PostgreSQL, Prisma, Docker, environment variables; optional LLM API and email service (mocked by default); for real deployment: EHR/HIE integration, messaging gateway, identity provider, hosting in the required data-residency boundary.
+- **Limitations:** no real integrations or data; no clinical validation; Arabic not clinically reviewed; one pathway modelled; simulation parameters are assumptions; fairness unproven on real populations; not security audited.
+
+## 12. Demo scenario (the one story judges follow)
+
+1. Admin creates (or seeds) a synthetic actionable screening case.
+2. Doctor reviews, approves summary and next step, creates a referral. Patient is notified.
+3. Patient logs in (en or ar), reads the explanation, acknowledges.
+4. Referral sits pending; admin advances the demo clock; the SLA is breached.
+5. Coordinator dashboard flags the case as HIGH attention with plain reasons and a suggested operational action.
+6. Coordinator contacts the patient, receiving provider accepts, appointment is scheduled and attended.
+7. Case closes with evidence; the timeline shows every step and owner; analytics update.
+
+## 13. Acceptance criteria (minimum for submission)
+
+- All four roles can perform their authorized actions.
+- A case can travel the full workflow, including one rejected-referral path.
+- Unauthorized access to patient data is blocked (tested).
+- Invalid transitions and closure without evidence are rejected (tested).
+- Overdue / pending / unassigned cases are detected by rules with reasons.
+- Every state change and sensitive read is auditable.
+- Analytics reflect real database records.
+- The demo scenario runs repeatably from seed data, on a fresh machine, via the README.
+- `docs/` complete, including section 08.
+
+## 14. Progress log (newest first; update every session)
+
+| Date | Agent/model | Done | Next step |
+|---|---|---|---|
+| — | — | Context files created. Nothing built yet. | Start Phase 0 (T-001) |
+
+## 15. Decisions log (update whenever decided or changed)
+
+| # | Decision | Reason |
+|---|---|---|
+| 1 | Challenge 05 chosen | Engineering-heavy, demonstrable with synthetic data, low clinical risk |
+| 2 | Name: CareLoop | Owner decision |
+| 3 | Modular monolith: Next.js + Express + PostgreSQL + Prisma, REST, polling | One deployable, familiar tools, enough for scope |
+| 4 | No Kafka/Redis/WebSockets/microservices | Solo, 20 days; documented as scale-up path only |
+| 5 | Escalation is an overlay on a case, not a state | Avoids state explosion; case keeps its workflow position |
+| 6 | Acknowledgement is a timestamp, not a state | Patient inaction must not block clinical progress |
+| 7 | Overdue computed at query time with injectable clock | Simple, testable, and demo-able via time advance |
+| 8 | Rules-based attention engine, no ML | Synthetic labels would make ML circular; rules are explainable |
+| 9 | Explanation = templates first, optional LLM, clinician approval | Safe, works offline, defensible |
+| 10 | Event log doubles as timeline and audit | One source of truth |
+| 11 | Provider and Consult entities included | Challenge requires cross-provider coordination |
+| 12 | English + Arabic (RTL) on patient portal only | Shows linguistic appropriateness at low cost |
+
+## 16. Open questions (owner decides)
+
+- Which screening pathway label to use in the demo (e.g. adult comprehensive screening, abnormal finding)?
+- Hosting target for the live demo?
+- Reuse auth/RBAC scaffolding from an existing personal project, or start clean?
+- Is an LLM key available for the optional explanation rewrite, or template-only?
+
+## 17. Resuming with a different model
+
+Read sections 1, 3-6, 10, then the latest rows of 14 and 15, then `TASKS.md`, then `git log` and the test results.
+Continue from the first unfinished task. Do not redesign anything already decided.
