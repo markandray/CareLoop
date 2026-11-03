@@ -359,7 +359,13 @@ function resolveDueAt(
   rule: { slaKey: keyof typeof workflowConfig.slaMs; base: 'NOW' | 'SCHEDULED_AT' | 'FOLLOW_UP_AT' } | null,
   input: EvaluateTransitionInput,
   evidence: Record<string, unknown>,
-): { ok: true; dueAt: Date | null } | { ok: false; code: 'EVIDENCE_MISSING'; details: Record<string, unknown> } {
+):
+  | { ok: true; dueAt: Date | null }
+  | {
+      ok: false;
+      code: 'EVIDENCE_MISSING' | 'VALIDATION_ERROR';
+      details: Record<string, unknown>;
+    } {
   if (!rule) return { ok: true, dueAt: null };
   if (rule.base === 'FOLLOW_UP_AT') {
     const followUpAt = evidence.followUpAt;

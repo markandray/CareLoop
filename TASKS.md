@@ -60,6 +60,7 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: `core/stateMachine.ts` as a transition table with actor-role rules and required evidence; unit tests.
 - Accept: every allowed transition tested; every disallowed transition rejected with a clear error; closure without evidence rejected; non-completed closure without clinician sign-off rejected.
 - Evidence (2026-11-03): centralized workflow SLA/attention configuration, a table covering every shared transition key, and a pure evaluator are committed. Generated architecture diagram and transition table via `npm run docs:state-machine`. `npm run lint`, `npm run build`, and `npm test` passed; Vitest reports 108 tests across four files. Ambiguous policy interpretations are documented as spec issues in `docs/03-System-Architecture.md`.
+- T-103 clarification patch (2026-11-03): closure provider rules, CONFIRMATION_PENDING assigned owner, required user-attributed sign-off evidence, optional bounded START_CARE follow-up, and the 2-day appointment grace were implemented, tested, documented, and committed in numbered steps. Resolved decisions moved into `docs/03-System-Architecture.md` and AGENTS.md Decisions. `npm run lint`, `npm run build`, and all 113 tests passed.
 
 ### [ ] T-104 Patients and cases (create/read)
 - Agent: Codex. Depends: T-101, T-102
