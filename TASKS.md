@@ -62,10 +62,21 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Evidence (2026-11-03): centralized workflow SLA/attention configuration, a table covering every shared transition key, and a pure evaluator are committed. Generated architecture diagram and transition table via `npm run docs:state-machine`. `npm run lint`, `npm run build`, and `npm test` passed; Vitest reports 108 tests across four files. Ambiguous policy interpretations are documented as spec issues in `docs/03-System-Architecture.md`.
 - T-103 clarification patch (2026-11-03): closure provider rules, CONFIRMATION_PENDING assigned owner, required user-attributed sign-off evidence, optional bounded START_CARE follow-up, and the 2-day appointment grace were implemented, tested, documented, and committed in numbered steps. Resolved decisions moved into `docs/03-System-Architecture.md` and AGENTS.md Decisions. `npm run lint`, `npm run build`, and all 113 tests passed.
 
-### [ ] T-104 Patients and cases (create/read)
+### [x] T-104 Patients and cases (create/read)
 - Agent: Codex. Depends: T-101, T-102
 - Output: create case (doctor/admin), list/get with role-scoped visibility, assignment, case id format `CL-####`.
-- Accept: patient sees only own cases; doctor sees own provider's/assigned cases; unauthorized access returns 403 and is tested; sensitive reads audited.
+- Accept: patient sees only own cases; doctor/coordinator see own-origin-provider cases; out-of-scope cases return 404; disallowed create roles return 403; sensitive reads audited.
+- Evidence (2026-11-03): T-104a and T-104b are complete. `npm run lint`, `npm run build`, `npm test` (108), and `npm run test:db` (37; all pass) passed. HTTP DB tests cover create/read visibility, patient-safe events, coordinator redaction, pagination, strict validation, origin checks, and read audit. Rebuilt Compose services, seeded synthetic data, and verified curl POST 201, GET 200, and cross-provider GET 404.
+
+#### [x] T-104a Case data layer
+- Agent: Codex. Depends: T-101, T-102, T-103
+- Output: case visibility scopes, zod-validated role projections, transaction-backed create/list/get/event data service, and Compose DB tests. No routes are included.
+- Evidence (2026-11-03): `npm run lint`, `npm run build`, `npm test` (108 tests), and `npm run test:db` (29 tests) pass. DB suite confirmed case visibility, redacted DTOs/events, atomic writes/rollback, stable keyset pagination, and read audits. Receiving-provider access remains for T-201; authenticated routes were added in T-104b.
+
+#### [x] T-104b Case routes
+- Agent: Codex. Depends: T-104a, T-101
+- Output: authenticated case create/list/detail/event routes and HTTP integration tests.
+- Evidence (2026-11-03): added strict shared-schema routes under `/api/v1/cases`, mounted behind authentication, and added Compose DB HTTP tests. The tests also exposed and fixed Express 5 query getter mutation in validation middleware. See the T-104 evidence above for commands and live curl results.
 
 ### [ ] T-105 Case transitions endpoint
 - Agent: Codex. Depends: T-103, T-104
