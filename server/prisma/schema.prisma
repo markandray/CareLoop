@@ -284,6 +284,10 @@ model ScreeningCase {
   resultCategory           String          @db.VarChar(160)
   resultSummaryApproved    String?         @db.Text
   recommendedNextStep      String?         @db.Text
+  reviewDraftSummary       String?         @db.Text
+  reviewDraftNextStep      String?         @db.Text
+  reviewDraftUrgencyLabel  Urgency?
+  reviewRoute              String?         @db.VarChar(16)
   intakeUrgency            Urgency
   urgencyLabel             Urgency?
   state                    CaseState       @default(NEW)
