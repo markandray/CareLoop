@@ -47,10 +47,10 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: register/login/logout/me, bcrypt, JWT httpOnly cookie, `auth` and `role` middleware, seed of demo users (patient, 2 doctors in different providers, coordinator, admin).
 - Accept: tests prove each role is allowed/denied on a sample route; passwords never returned; invalid token rejected.
 
-### [ ] T-102 Clock, event log and audit core
+### [x] T-102 Clock, event log and audit core
 - Agent: Codex. Depends: T-002
-- Output: `core/clock.ts` (injectable, supports offset), `core/eventLog.ts` (append-only writer), `core/audit.ts`.
-- Accept: unit tests; no update/delete on events; all time reads in code go through the clock.
+- Output: `core/clock.ts` (injectable, persisted offset), `core/eventLog.ts` (append-only writer), `core/audit.ts`, and a shared transaction helper.
+- Accept: clock persistence, append/rollback, append-only database triggers, and actor constraints verified by the Compose-backed core tests; ESLint forbids direct wall-clock reads outside `core/clock.ts`.
 
 ### [ ] T-103 State machine module
 - Agent: Codex. Depends: T-001, T-102

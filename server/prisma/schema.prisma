@@ -236,6 +236,7 @@ model User {
   approvedExplanations ExplanationDraft[] @relation("ExplanationApprover")
   notifications        Notification[]
   auditEntries         AuditLog[]         @relation("AuditActor")
+  updatedSettings      SystemSetting[]    @relation("SystemSettingUpdater")
 
   @@index([providerId, role])
 }
@@ -524,4 +525,13 @@ model AuditLog {
   @@index([actorId, createdAt])
   @@index([entityType, entityId, createdAt])
   @@index([action, createdAt])
+}
+
+model SystemSetting {
+  key         String   @id @db.VarChar(120)
+  value       Json
+  updatedAt   DateTime @db.Timestamptz(3)
+  updatedById String?  @db.Uuid
+
+  updatedBy User? @relation("SystemSettingUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
 }

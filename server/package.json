@@ -4,11 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "npm run generate && tsc -p tsconfig.json",
+    "generate": "prisma generate",
+    "test": "npm run generate && prisma migrate deploy && tsx --test src/core/*.test.ts",
     "start": "node dist/server.js"
   },
   "dependencies": {
     "@careloop/shared": "*",
+    "@prisma/client": "^6.9.0",
     "express": "^5.1.0",
     "prisma": "^6.9.0"
   },

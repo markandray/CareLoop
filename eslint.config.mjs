@@ -21,6 +21,30 @@ export default [
       },
     },
     plugins: { '@typescript-eslint': tsPlugin },
-    rules: { ...tsPlugin.configs.recommended.rules },
+    rules: {
+      ...tsPlugin.configs.recommended.rules,
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+          message: 'Use the injected core clock instead of new Date().',
+        },
+      ],
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'Date',
+          property: 'now',
+          message: 'Use the injected core clock instead of Date.now().',
+        },
+      ],
+    },
+  },
+  {
+    files: ['server/src/core/clock.ts'],
+    rules: {
+      'no-restricted-syntax': 'off',
+      'no-restricted-properties': 'off',
+    },
   },
 ];
