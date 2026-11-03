@@ -363,9 +363,25 @@ function resolveDueAt(
   if (!rule) return { ok: true, dueAt: null };
   if (rule.base === 'FOLLOW_UP_AT') {
     const followUpAt = evidence.followUpAt;
-    return typeof followUpAt === 'string'
-      ? { ok: true, dueAt: new Date(followUpAt) }
-      : { ok: false, code: 'EVIDENCE_MISSING', details: { required: 'followUpAt' } };
+    if (typeof followUpAt !== 'string') {
+      return {
+        ok: true,
+        dueAt: dueAtFor('defaultFollowUpInterval', 'ROUTINE', input.now),
+      };
+    }
+    const dueAt = new Date(followUpAt);
+    const maxDueAt = new Date(input.now.getTime() + 180 * 24 * 60 * 60 * 1000);
+    if (dueAt <= input.now || dueAt > maxDueAt) {
+      return {
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        details: {
+          field: 'followUpAt',
+          reason: 'Must be after now and no more than 180 days ahead.',
+        },
+      };
+    }
+    return { ok: true, dueAt };
   }
   const base = rule.base === 'SCHEDULED_AT' ? evidence.scheduledAt : input.now;
   if (!(base instanceof Date) && typeof base !== 'string') {

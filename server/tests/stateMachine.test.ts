@@ -397,6 +397,32 @@ describe('state machine table and evaluator', () => {
     });
   });
 
+  it('defaults START_CARE follow-up to 30 days and validates an explicit date within 180 days', () => {
+    const input = baseInput('START_CARE');
+    const expectedDefault = new Date(FIXED_NOW.getTime() + 30 * 24 * 60 * 60 * 1000);
+    input.evidence = { carePlan: 'Synthetic care plan.' };
+    expect(evaluateTransition(input)).toMatchObject({ ok: true, dueAt: expectedDefault });
+
+    const withinLimit = new Date(FIXED_NOW.getTime() + 180 * 24 * 60 * 60 * 1000);
+    input.evidence = {
+      carePlan: 'Synthetic care plan.',
+      followUpAt: withinLimit.toISOString(),
+    };
+    expect(evaluateTransition(input)).toMatchObject({ ok: true, dueAt: withinLimit });
+
+    input.evidence = {
+      carePlan: 'Synthetic care plan.',
+      followUpAt: FIXED_NOW.toISOString(),
+    };
+    expect(evaluateTransition(input)).toMatchObject({ ok: false, code: 'VALIDATION_ERROR' });
+
+    input.evidence = {
+      carePlan: 'Synthetic care plan.',
+      followUpAt: new Date(FIXED_NOW.getTime() + 181 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    expect(evaluateTransition(input)).toMatchObject({ ok: false, code: 'VALIDATION_ERROR' });
+  });
+
   it('allows closure by originating or consented receiving doctors after referral, but scopes earlier closures to origin', () => {
     const postReferral = [
       'CLOSE_REFERRAL_PATIENT_DECLINED',

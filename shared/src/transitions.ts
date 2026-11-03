@@ -129,7 +129,7 @@ export const TransitionEvidenceSchemas = {
   START_CARE: z
     .object({
       carePlan: z.string().trim().min(1).max(4000),
-      followUpAt: UtcTimestampSchema,
+      followUpAt: UtcTimestampSchema.optional(),
     })
     .strict(),
   RESCHEDULE_APPOINTMENT: z
