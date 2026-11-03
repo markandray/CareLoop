@@ -1,8 +1,10 @@
 import {
   type CaseState,
+  type CaseEventType,
   type ClosureReason,
   type DelayReason,
   type EvidenceKind,
+  type NotificationTemplateKey,
   type Role,
   type TransitionKey,
   type Urgency,
@@ -94,8 +96,8 @@ export type TransitionEvaluation =
       newState: CaseState;
       owner: TransitionOwner;
       dueAt: Date | null;
-      notificationTemplate: string | null;
-      eventType: string;
+      notificationTemplate: NotificationTemplateKey | null;
+      eventType: CaseEventType;
       derivedEvidence: DerivedEvidence[];
     }
   | {
