@@ -13,6 +13,7 @@ import { createAuthMiddleware } from './middleware/auth/authMiddleware';
 import { requireRole } from './middleware/role/roleMiddleware';
 import { AuthService } from './modules/auth/authService';
 import { createAuthRouter } from './modules/auth/authRoutes';
+import { createCaseRouter } from './modules/cases/caseRoutes';
 
 export interface AppContext {
   prisma: PrismaClient;
@@ -59,6 +60,8 @@ export function createApp(
     '/auth',
     createAuthRouter(authService, authenticate, env),
   );
+
+  apiV1Router.use('/cases', createCaseRouter(prisma, clock, authenticate));
 
   // Development/test-only routes for verifying requireRole matrix and auth behaviors
   if (env.NODE_ENV !== 'production') {
