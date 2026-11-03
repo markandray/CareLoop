@@ -44,6 +44,8 @@ Request and response names below correspond to exported Zod schemas/types from `
 
 `CaseDetailCoordinator` deliberately has no `resultCategory` or `resultSummaryApproved`; it may contain only an approved patient explanation. `GET /cases/:id/events` returns `CaseEventDtoPatient` to PATIENT (label, timestamp and patient-friendly status only) and `CaseEventDtoStaff` to staff. `ReferralPacket` is the receiving-provider projection and excludes origin-only notes and unrelated case details. Admin case access is read-only except the explicit owner assignment action.
 
+Referral summaries and `ReferralDto` include nullable `reason`; appointment summaries and `AppointmentDto` include nullable `location`. Patient case details include the appointment location so the patient can find the scheduled visit.
+
 ### Lifecycle transition keys and evidence
 
 Each lifecycle row in Product Requirements §1.1 maps to exactly one `TransitionKey`. `TransitionRequestSchema` requires `expectedState: CaseState`; a stale state is rejected with HTTP 409 `CONFLICT`. `CreateCaseRequestSchema` is the initial `none → NEW` bootstrap and therefore has no prior state. Evidence is a strict discriminated union. Clients send only human-entered content and choices; the server resolves associated records and validates preconditions. Missing records or facts return `422 EVIDENCE_MISSING` with `{required, observed}` details. In particular, unreachable closure checks for at least three failed attempts on the current milestone and an escalation event; `START_CARE` and completed-care closure require an ATTENDED appointment; patient-decline closures require the recorded decline; and confirmation/referral paths verify the recorded confirmatory result where applicable.

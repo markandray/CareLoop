@@ -418,6 +418,7 @@ function evidenceKinds(
   if (key === 'SCHEDULE_APPOINTMENT' || key === 'RESCHEDULE_APPOINTMENT') return [EvidenceKind.APPOINTMENT_SCHEDULED];
   if (key === 'START_CARE') return [EvidenceKind.CARE_PLAN];
   if (key === 'CLOSE_COMPLETED_CARE') return [EvidenceKind.CARE_COMPLETION];
+  if (key === 'CLOSE_NOT_CONFIRMED') return [EvidenceKind.CONFIRMATORY_RESULT];
   if (key.startsWith('CLOSE_') && evidence.closureReason === 'PATIENT_DECLINED') return [EvidenceKind.PATIENT_DECLINE];
   if (key.startsWith('CLOSE_') && evidence.closureReason === 'UNREACHABLE_AFTER_ATTEMPTS') return [EvidenceKind.UNREACHABLE_STATUS];
   if (key.startsWith('CLOSE_') && evidence.closureReason === 'TRANSFERRED_OUT') return [EvidenceKind.EXTERNAL_TRANSFER];

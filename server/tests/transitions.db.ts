@@ -12,11 +12,20 @@ import {
   ProviderType,
   Role,
 } from '@prisma/client';
-import type { TransitionEvidenceByKey, TransitionKey, TransitionRequest } from '@careloop/shared';
+import {
+  TransitionEvidenceSchemas,
+  TransitionKeySchema,
+  type TransitionEvidenceByKey,
+  type TransitionKey,
+  type TransitionRequest,
+} from '@careloop/shared';
 import type { Clock } from '../src/core/clock';
 import { appendEvent } from '../src/core/eventLog';
 import { executeTransition, type TransitionServiceDependencies } from '../src/modules/cases/transitionService';
 import { getCase } from '../src/modules/cases/caseService';
+import { evaluateTransition } from '../src/core/stateMachine/evaluateTransition';
+import { transitionTable } from '../src/core/stateMachine/transitionTable';
+import { loadFacts } from '../src/modules/cases/transitionFacts';
 import type { CaseActor } from '../src/modules/cases/caseVisibility';
 
 const prisma = new PrismaClient();
@@ -247,6 +256,10 @@ test('rescheduling allows SCHEDULED or MISSED only and preserves prior status se
     const previousAfter = await prisma.appointment.findUniqueOrThrow({ where: { id: previous.id } });
     const created = await prisma.appointment.findMany({ where: { referralId: referral.id, id: { not: previous.id } } });
     assert.equal(previousAfter.status, priorStatus === 'SCHEDULED' ? 'RESCHEDULED' : 'MISSED');
+    assert.equal(
+      previousAfter.delayReason,
+      priorStatus === 'SCHEDULED' ? 'APPOINTMENT_RESCHEDULED' : 'PATIENT_UNREACHABLE',
+    );
     assert.equal(created.length, 1);
     assert.equal(created[0]?.status, 'SCHEDULED');
     assert.equal(created[0]?.scheduledAt.toISOString(), newScheduledAt.toISOString());
@@ -348,8 +361,384 @@ test('audit failure rolls the transition back atomically', async () => {
   await assertCounts(item.id, before);
 });
 
+test('every transition key persists the evaluator outcome and exactly its owned rows', async (t) => {
+  const keys = TransitionKeySchema.options.filter(
+    (key): key is Exclude<TransitionKey, 'CREATE_CASE'> => key !== 'CREATE_CASE',
+  );
+  assert.equal(TransitionKeySchema.options.length, 25);
+  assert.equal(keys.length, 24);
+  assert.ok(TransitionKeySchema.options.includes('CREATE_CASE'));
+  for (const key of keys) {
+    await t.test(key, async () => {
+      const fixture = await prepareTransitionFixture(key);
+      const actorUser = transitionActor(key);
+      const transitionEvidence = evidenceForTransition(key, fixture.explanationIds, fixture.referralId);
+      const requestPayload = {
+        transitionKey: key,
+        expectedState: transitionTable[key].from,
+        evidence: transitionEvidence,
+        ...(key === 'RESCHEDULE_APPOINTMENT' ? { delayReason: 'APPOINTMENT_RESCHEDULED' } : {}),
+      } as unknown as TransitionRequest;
+      const beforeCounts = await counts(fixture.caseId);
+      const beforeEvidenceIds = new Set((await prisma.evidence.findMany({
+        where: { caseId: fixture.caseId }, select: { id: true },
+      })).map((row) => row.id));
+      const beforeEventIds = new Set((await prisma.caseEvent.findMany({
+        where: { caseId: fixture.caseId }, select: { id: true },
+      })).map((row) => row.id));
+      const beforeNotificationIds = new Set((await prisma.notification.findMany({
+        where: { caseId: fixture.caseId }, select: { id: true },
+      })).map((row) => row.id));
+
+      const initial = await prisma.screeningCase.findUniqueOrThrow({ where: { id: fixture.caseId } });
+      const loaded = await prisma.$transaction((tx) => loadFacts(
+        tx,
+        initial,
+        key,
+        { userId: actorUser.userId, role: actorUser.role, providerId: actorUser.providerId },
+        { now, evidence: transitionEvidence },
+      ));
+      const expected = evaluateTransition({
+        transitionKey: key,
+        expectedState: initial.state,
+        actor: { userId: actorUser.userId, role: actorUser.role, providerId: actorUser.providerId },
+        case: {
+          state: initial.state,
+          originProviderId: initial.originProviderId,
+          sendingProviderId: loaded.currentReferral?.fromProviderId,
+          receivingProviderId: loaded.currentReferral?.toProviderId,
+          ownerUserId: initial.ownerUserId,
+          intakeUrgency: initial.intakeUrgency,
+          urgencyLabel: key === 'REVIEW_CASE' ? initial.reviewDraftUrgencyLabel : initial.urgencyLabel,
+        },
+        facts: loaded.facts,
+        evidence: transitionEvidence,
+        delayReason: key === 'RESCHEDULE_APPOINTMENT' ? 'APPOINTMENT_RESCHEDULED' : undefined,
+        now,
+      });
+      assert.equal(expected.ok, true, `${key} fixture must satisfy evaluator preconditions`);
+      if (!expected.ok) return;
+
+      const result = await executeTransition(dependencies, actorUser, fixture.caseId, requestPayload);
+      assert.equal(result.event.type, expected.eventType);
+      const after = await prisma.screeningCase.findUniqueOrThrow({ where: { id: fixture.caseId } });
+      assert.equal(after.state, expected.newState);
+      assert.equal(after.dueAt?.toISOString() ?? null, expected.dueAt?.toISOString() ?? null);
+      assertOwnerMatches(after, expected.owner);
+      if (expected.newState === 'CLOSED') {
+        assert.equal(after.closureReason, transitionTable[key].closureReason);
+        assert.equal(after.closedAt?.toISOString(), now.toISOString());
+      } else {
+        assert.equal(after.closureReason, null);
+        assert.equal(after.closedAt, null);
+      }
+
+      const newEvents = (await prisma.caseEvent.findMany({ where: { caseId: fixture.caseId } }))
+        .filter((event) => !beforeEventIds.has(event.id));
+      assert.equal(newEvents.filter((event) => event.type === expected.eventType).length, 1);
+      assert.equal(newEvents.length, 1 + (key === 'RESCHEDULE_APPOINTMENT' ? 1 : 0));
+
+      const newEvidence = (await prisma.evidence.findMany({ where: { caseId: fixture.caseId } }))
+        .filter((evidence) => !beforeEvidenceIds.has(evidence.id));
+      const expectedKinds = evidenceKindsForTransition(key);
+      assert.deepEqual(newEvidence.map((row) => row.kind).sort(), expectedKinds.sort());
+      if (key.startsWith('CLOSE_')) {
+        const signOff = newEvidence.find((row) => row.kind === 'CLINICIAN_SIGN_OFF');
+        assert.ok(signOff);
+        assert.equal(signOff.recordedBy, actorUser.userId);
+        assert.equal((signOff.details as { clinicianSignOff?: { clinicianId?: string } }).clinicianSignOff?.clinicianId, actorUser.userId);
+      }
+
+      const newNotifications = (await prisma.notification.findMany({ where: { caseId: fixture.caseId } }))
+        .filter((notification) => !beforeNotificationIds.has(notification.id));
+      if (expected.notificationTemplate) {
+        assert.equal(newNotifications.length, 1);
+        assert.equal(newNotifications[0]?.templateKey, expected.notificationTemplate);
+        assert.equal(newNotifications[0]?.status, 'QUEUED');
+      } else {
+        assert.equal(newNotifications.length, 0);
+      }
+      assert.equal(await prisma.auditLog.count({
+        where: { entityId: fixture.caseId, action: `CASE_TRANSITION_${key}`, actorId: actorUser.userId },
+      }), 1);
+
+      const afterCounts = await counts(fixture.caseId);
+      assert.equal(afterCounts.events - beforeCounts.events, 1 + (key === 'RESCHEDULE_APPOINTMENT' ? 1 : 0));
+      assert.equal(afterCounts.evidence - beforeCounts.evidence, expectedKinds.length);
+      assert.equal(afterCounts.notifications - beforeCounts.notifications, expected.notificationTemplate ? 1 : 0);
+      assert.equal(afterCounts.audits - beforeCounts.audits, 1);
+      assert.equal(afterCounts.referrals - beforeCounts.referrals,
+        key === 'CREATE_REFERRAL_FROM_REVIEW' || key === 'CREATE_REFERRAL_AFTER_CONFIRMATION' || key === 'REASSIGN_REFERRAL' ? 1 : 0);
+      assert.equal(afterCounts.appointments - beforeCounts.appointments,
+        key === 'SCHEDULE_APPOINTMENT' || key === 'RESCHEDULE_APPOINTMENT' ? 1 : 0);
+
+      if (key === 'CREATE_REFERRAL_FROM_REVIEW' || key === 'CREATE_REFERRAL_AFTER_CONFIRMATION' || key === 'REASSIGN_REFERRAL') {
+        const eventRow = newEvents.find((event) => event.type === expected.eventType);
+        const eventPayload = eventRow?.payload as { referralId?: string } | null;
+        assert.ok(eventPayload?.referralId);
+        const createdReferral = await prisma.referral.findUniqueOrThrow({ where: { id: eventPayload.referralId } });
+        assert.equal(createdReferral.reason, (transitionEvidence as { referralReason: string }).referralReason);
+        assert.equal(createdReferral.status, 'PENDING');
+      }
+      if (key === 'SCHEDULE_APPOINTMENT' || key === 'RESCHEDULE_APPOINTMENT') {
+        const eventRow = newEvents.find((event) => event.type === expected.eventType);
+        const eventPayload = eventRow?.payload as { appointmentId?: string } | null;
+        assert.ok(eventPayload?.appointmentId);
+        const createdAppointment = await prisma.appointment.findUniqueOrThrow({ where: { id: eventPayload.appointmentId } });
+        assert.equal(createdAppointment.location, (transitionEvidence as { location: string }).location);
+        assert.equal(createdAppointment.status, 'SCHEDULED');
+      }
+    });
+  }
+});
+
+test('confirmation route can close NOT_CONFIRMED or proceed to referral after confirmation', async () => {
+  for (const branch of ['CLOSE_NOT_CONFIRMED', 'CREATE_REFERRAL_AFTER_CONFIRMATION'] as const) {
+    const item = await makeCase('NEW', true, 'CONFIRMATION', doctorOrigin);
+    const explanationIds = await approvedExplanations(item.id);
+    await seedReviewedSent(item.id);
+    await executeTransition(dependencies, actor(doctorOrigin, 'DOCTOR', originId), item.id,
+      request('REVIEW_CASE', 'NEW', { approvedExplanationIds: explanationIds }));
+    await executeTransition(dependencies, actor(coordinatorOrigin, 'COORDINATOR', originId), item.id,
+      request('REQUEST_CONFIRMATION', 'CLINICIAN_REVIEWED', {}));
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } })).state, 'CONFIRMATION_PENDING');
+    await prisma.evidence.create({
+      data: {
+        caseId: item.id,
+        kind: 'CONFIRMATORY_RESULT',
+        recordedBy: doctorOrigin,
+        details: { result: 'confirmatory result recorded' },
+        createdAt: now,
+      },
+    });
+    if (branch === 'CLOSE_NOT_CONFIRMED') {
+      await executeTransition(dependencies, actor(doctorOrigin, 'DOCTOR', originId), item.id,
+        request('CLOSE_NOT_CONFIRMED', 'CONFIRMATION_PENDING', {
+          closureReason: 'NOT_CONFIRMED', documentedReason: 'The finding was not confirmed.',
+        }));
+      const closed = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+      assert.equal(closed.state, 'CLOSED');
+      assert.equal(closed.closureReason, 'NOT_CONFIRMED');
+    } else {
+      await executeTransition(dependencies, actor(doctorOrigin, 'DOCTOR', originId), item.id,
+        request('CREATE_REFERRAL_AFTER_CONFIRMATION', 'CONFIRMATION_PENDING', {
+          toProviderId: receivingId,
+          referralReason: 'Confirmed finding requires specialty care.',
+        }));
+      const referral = await prisma.referral.findFirstOrThrow({ where: { caseId: item.id } });
+      assert.equal(referral.status, 'PENDING');
+      assert.equal(referral.reason, 'Confirmed finding requires specialty care.');
+    }
+  }
+});
+
 async function provider(label: string) {
   return prisma.provider.create({ data: { name: `T105 ${label} ${suffix}`, type: ProviderType.HOSPITAL } });
+}
+
+async function prepareTransitionFixture(key: Exclude<TransitionKey, 'CREATE_CASE'>) {
+  const definition = transitionTable[key];
+  const state = definition.from as CaseState;
+  const route = key === 'REQUEST_CONFIRMATION'
+    ? 'CONFIRMATION'
+    : key === 'REVIEW_CASE' || key === 'CREATE_REFERRAL_FROM_REVIEW'
+      ? 'REFERRAL'
+      : null;
+  const withDraft = key === 'REVIEW_CASE' || key === 'REQUEST_CONFIRMATION' || key === 'CREATE_REFERRAL_FROM_REVIEW';
+  const item = await makeCase(state, withDraft, route, doctorOrigin);
+  const explanationIds = await approvedExplanations(item.id);
+  await seedReviewedSent(item.id);
+
+  let referralId: string | null = null;
+  if (['REFERRAL_PENDING', 'REFERRAL_ACCEPTED', 'APPOINTMENT_SCHEDULED', 'CARE_STARTED'].includes(state)) {
+    const status = key === 'REASSIGN_REFERRAL'
+      ? 'REJECTED'
+      : state === 'REFERRAL_PENDING'
+        ? 'PENDING'
+        : 'ACCEPTED';
+    const referral = await prisma.referral.create({
+      data: {
+        caseId: item.id,
+        fromProviderId: originId,
+        toProviderId: receivingId,
+        status,
+        rejectionReason: status === 'REJECTED' ? 'Synthetic rejection reason' : null,
+        respondedAt: status === 'PENDING' ? null : now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    referralId = referral.id;
+  }
+
+  let appointmentId: string | null = null;
+  if (state === 'APPOINTMENT_SCHEDULED' || state === 'CARE_STARTED') {
+    assert.ok(referralId);
+    const status = state === 'CARE_STARTED' || key === 'START_CARE' ? 'ATTENDED' : 'SCHEDULED';
+    const appointment = await prisma.appointment.create({
+      data: {
+        referralId,
+        scheduledAt: new Date(now.getTime() + 5 * 24 * 60 * 60_000),
+        status,
+        location: 'Synthetic appointment location',
+        delayReason: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    appointmentId = appointment.id;
+  }
+
+  if (key === 'CLOSE_NOT_CONFIRMED' || key === 'CREATE_REFERRAL_AFTER_CONFIRMATION') {
+    await prisma.evidence.create({
+      data: {
+        caseId: item.id,
+        kind: 'CONFIRMATORY_RESULT',
+        recordedBy: doctorOrigin,
+        details: { result: 'Synthetic confirmatory result' },
+        createdAt: now,
+      },
+    });
+  }
+  if (key.includes('PATIENT_DECLINED')) {
+    await prisma.evidence.create({
+      data: {
+        caseId: item.id,
+        kind: 'PATIENT_DECLINE',
+        recordedBy: doctorOrigin,
+        details: { documentedReason: 'Synthetic patient decline' },
+        createdAt: now,
+      },
+    });
+  }
+  if (key.includes('UNREACHABLE')) {
+    await prisma.evidence.create({
+      data: {
+        caseId: item.id,
+        kind: 'ESCALATION_RECORD',
+        recordedBy: doctorOrigin,
+        details: { level: 'LEVEL_1' },
+        createdAt: now,
+      },
+    });
+    for (let index = 0; index < 3; index += 1) {
+      await prisma.contactAttempt.create({
+        data: {
+          caseId: item.id,
+          byUserId: coordinatorOrigin,
+          milestoneState: state,
+          referralId: state === 'REFERRAL_PENDING' ? referralId : null,
+          appointmentId: state === 'APPOINTMENT_SCHEDULED' ? appointmentId : null,
+          channel: 'PHONE',
+          outcome: 'FAILED',
+          createdAt: now,
+        },
+      });
+    }
+  }
+  return { caseId: item.id, explanationIds, referralId, appointmentId };
+}
+
+function transitionActor(key: Exclude<TransitionKey, 'CREATE_CASE'>): CaseActor {
+  const definition = transitionTable[key];
+  const role = definition.allowedRoles[0];
+  assert.ok(role);
+  const relationship = definition.providerRules[role];
+  const providerId = relationship === 'RECEIVING_PROVIDER'
+    ? receivingId
+    : relationship === 'ANY'
+      ? null
+      : originId;
+  const userId = role === 'COORDINATOR'
+    ? providerId === receivingId ? coordinatorReceiving : coordinatorOrigin
+    : providerId === receivingId ? doctorReceiving : doctorOrigin;
+  return actor(userId, role, providerId);
+}
+
+function evidenceForTransition(
+  key: Exclude<TransitionKey, 'CREATE_CASE'>,
+  explanationIds: [string, string],
+  referralId: string | null,
+): Record<string, unknown> {
+  let value: Record<string, unknown>;
+  if (key === 'REVIEW_CASE') value = { approvedExplanationIds: explanationIds };
+  else if (key === 'REQUEST_CONFIRMATION') value = {};
+  else if (key === 'CREATE_REFERRAL_FROM_REVIEW' || key === 'CREATE_REFERRAL_AFTER_CONFIRMATION') {
+    value = { toProviderId: receivingId, referralReason: `Reason for ${key}` };
+  } else if (key === 'REASSIGN_REFERRAL') {
+    value = { toProviderId: alternateId, referralReason: 'Reassigned to alternate provider' };
+  } else if (key === 'ACCEPT_REFERRAL') {
+    assert.ok(referralId);
+    value = { referralId };
+  } else if (key === 'SCHEDULE_APPOINTMENT' || key === 'RESCHEDULE_APPOINTMENT') {
+    value = {
+      scheduledAt: new Date(now.getTime() + 10 * 24 * 60 * 60_000).toISOString(),
+      location: `Location for ${key}`,
+    };
+  } else if (key === 'START_CARE') {
+    value = {
+      carePlan: 'Synthetic care plan',
+      followUpAt: new Date(now.getTime() + 30 * 24 * 60 * 60_000).toISOString(),
+    };
+  } else if (key === 'CLOSE_NOT_CONFIRMED') {
+    value = { closureReason: 'NOT_CONFIRMED', documentedReason: 'Synthetic result was not confirmed.' };
+  } else if (key.includes('PATIENT_DECLINED')) {
+    value = { closureReason: 'PATIENT_DECLINED', documentedReason: 'Patient chose to decline.' };
+  } else if (key.includes('UNREACHABLE')) {
+    value = { closureReason: 'UNREACHABLE_AFTER_ATTEMPTS', documentedReason: 'Three attempts failed.' };
+  } else if (key === 'CLOSE_COMPLETED_CARE') {
+    value = {
+      closureReason: 'COMPLETED_CARE',
+      documentedReason: 'Care completed.',
+      careCompletionSummary: 'Synthetic completion evidence.',
+    };
+  } else {
+    value = {
+      closureReason: 'TRANSFERRED_OUT',
+      documentedReason: 'Transfer documented.',
+      externalProviderName: 'Synthetic external provider',
+      facilityContact: 'Synthetic facility contact',
+      handoverSummary: 'Synthetic handover.',
+    };
+  }
+  return TransitionEvidenceSchemas[key].parse(value) as Record<string, unknown>;
+}
+
+function evidenceKindsForTransition(key: Exclude<TransitionKey, 'CREATE_CASE'>): string[] {
+  let kinds: string[];
+  if (key === 'REVIEW_CASE') kinds = ['APPROVED_CLINICAL_PLAN', 'APPROVED_EXPLANATION'];
+  else if (key === 'REQUEST_CONFIRMATION') kinds = ['CONFIRMATION_TASK_CREATED'];
+  else if (key === 'CREATE_REFERRAL_FROM_REVIEW' || key === 'CREATE_REFERRAL_AFTER_CONFIRMATION') kinds = ['REFERRAL_CREATED'];
+  else if (key === 'ACCEPT_REFERRAL') kinds = ['REFERRAL_ACCEPTANCE'];
+  else if (key === 'REASSIGN_REFERRAL') kinds = ['REFERRAL_REASSIGNMENT'];
+  else if (key === 'SCHEDULE_APPOINTMENT' || key === 'RESCHEDULE_APPOINTMENT') kinds = ['APPOINTMENT_SCHEDULED'];
+  else if (key === 'START_CARE') kinds = ['CARE_PLAN'];
+  else if (key === 'CLOSE_NOT_CONFIRMED') kinds = ['CONFIRMATORY_RESULT'];
+  else if (key === 'CLOSE_COMPLETED_CARE') kinds = ['CARE_COMPLETION'];
+  else if (key.includes('PATIENT_DECLINED')) kinds = ['PATIENT_DECLINE'];
+  else if (key.includes('UNREACHABLE')) kinds = ['UNREACHABLE_STATUS'];
+  else kinds = ['EXTERNAL_TRANSFER'];
+  if (key.startsWith('CLOSE_')) kinds.push('CLINICIAN_SIGN_OFF');
+  return kinds;
+}
+
+function assertOwnerMatches(
+  row: { ownerUserId: string | null; ownerQueueRole: Role | null; ownerQueueProviderId: string | null },
+  expected: { kind: 'USER' | 'QUEUE' | 'UNASSIGNED'; userId?: string; role?: Role; providerId?: string },
+) {
+  if (expected.kind === 'USER') {
+    assert.equal(row.ownerUserId, expected.userId);
+    assert.equal(row.ownerQueueRole, null);
+    assert.equal(row.ownerQueueProviderId, null);
+  } else if (expected.kind === 'QUEUE') {
+    assert.equal(row.ownerUserId, null);
+    assert.equal(row.ownerQueueRole, expected.role);
+    assert.equal(row.ownerQueueProviderId, expected.providerId);
+  } else {
+    assert.equal(row.ownerUserId, null);
+    assert.equal(row.ownerQueueRole, null);
+    assert.equal(row.ownerQueueProviderId, null);
+  }
 }
 
 async function user(role: Role, label: string, providerId: string | null) {
