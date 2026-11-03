@@ -52,7 +52,7 @@ export type CaseListProjectionRecord = Prisma.ScreeningCaseGetPayload<{
   include: typeof caseListInclude;
 }>;
 
-type CaseDetailProjection =
+export type CaseDetailProjection =
   | CaseDetailPatient
   | CaseDetailDoctor
   | CaseDetailCoordinator
@@ -183,7 +183,9 @@ export function projectCaseForActor(
         recommendedNextStep: row.recommendedNextStep,
         referrals,
         appointments,
-        events: row.events.map((event) => patientEvent(event, row)),
+        events: row.events.map((event) =>
+          projectPatientCaseEvent(event, row.state, row.closureReason),
+        ),
       });
     }
     case 'DOCTOR':
@@ -200,7 +202,7 @@ export function projectCaseForActor(
         referrals,
         appointments,
         explanations: row.explanations.map(explanationDto),
-        events: row.events.map(staffEvent),
+        events: row.events.map(projectStaffCaseEvent),
       });
     case 'COORDINATOR': {
       const patientCopy = currentPatientCopy(row);
@@ -221,7 +223,7 @@ export function projectCaseForActor(
         owner: caseOwner(row),
         referrals,
         appointments,
-        events: row.events.map(staffEvent),
+        events: row.events.map(projectStaffCaseEvent),
       });
     }
     case 'ADMIN': {
@@ -238,7 +240,7 @@ export function projectCaseForActor(
         referrals,
         appointments,
         explanations: row.explanations.map(explanationDto),
-        events: row.events.map(staffEvent),
+        events: row.events.map(projectStaffCaseEvent),
       });
     }
   }
@@ -258,6 +260,40 @@ export function projectCaseListItem(row: CaseListProjectionRecord): CaseListItem
     escalationLevel: row.escalationLevel,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  });
+}
+
+export function projectPatientCaseEvent(
+  event: CaseProjectionRecord['events'][number],
+  currentState: CaseState,
+  closureReason: ClosureReason | null,
+): CaseEventDtoPatient {
+  const eventState = event.toState ?? currentState;
+  const patientCopy =
+    eventState === 'CLOSED' && closureReason
+      ? closureCopy[closureReason]
+      : stateCopy[eventState];
+  return CaseEventDtoPatientSchema.parse({
+    id: event.id,
+    label: patientEventLabels[event.type],
+    timestamp: event.createdAt.toISOString(),
+    patientStatus: patientCopy.label,
+  });
+}
+
+export function projectStaffCaseEvent(
+  event: CaseProjectionRecord['events'][number],
+): CaseEventDtoStaff {
+  return CaseEventDtoStaffSchema.parse({
+    id: event.id,
+    type: event.type,
+    fromState: event.fromState,
+    toState: event.toState,
+    actorType: event.actorType,
+    actorId: event.actorId,
+    actorName: event.actor?.name ?? null,
+    createdAt: event.createdAt.toISOString(),
+    payload: jsonObject(event.payload),
   });
 }
 
@@ -371,39 +407,6 @@ function currentPatientCopy(row: CaseProjectionRecord) {
     };
   }
   return stateCopy[row.state];
-}
-
-function patientEvent(
-  event: CaseProjectionRecord['events'][number],
-  row: CaseProjectionRecord,
-): CaseEventDtoPatient {
-  const eventState = event.toState ?? row.state;
-  const patientCopy =
-    eventState === 'CLOSED' && row.closureReason
-      ? closureCopy[row.closureReason]
-      : stateCopy[eventState];
-  return CaseEventDtoPatientSchema.parse({
-    id: event.id,
-    label: patientEventLabels[event.type],
-    timestamp: event.createdAt.toISOString(),
-    patientStatus: patientCopy.label,
-  });
-}
-
-function staffEvent(
-  event: CaseProjectionRecord['events'][number],
-): CaseEventDtoStaff {
-  return CaseEventDtoStaffSchema.parse({
-    id: event.id,
-    type: event.type,
-    fromState: event.fromState,
-    toState: event.toState,
-    actorType: event.actorType,
-    actorId: event.actorId,
-    actorName: event.actor?.name ?? null,
-    createdAt: event.createdAt.toISOString(),
-    payload: jsonObject(event.payload),
-  });
 }
 
 function jsonObject(value: Prisma.JsonValue | null): Record<string, unknown> | null {
