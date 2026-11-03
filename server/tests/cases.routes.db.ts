@@ -157,13 +157,22 @@ describe('T-104b case routes', () => {
       await responseJson<{ case: { id: string } }>(created)
     ).case.id;
 
-    const page = await fetch(`${baseUrl}/api/v1/cases?limit=100`, {
-      headers: authHeaders('ADMIN'),
-    });
-    assert.equal(page.status, 200);
-    const ids = (await responseJson<{ items: Array<{ id: string }> }>(page)).items.map(
-      (item) => item.id,
-    );
+    const ids: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const query = new URLSearchParams({ limit: '100' });
+      if (cursor) query.set('cursor', cursor);
+      const page = await fetch(`${baseUrl}/api/v1/cases?${query}`, {
+        headers: authHeaders('ADMIN'),
+      });
+      assert.equal(page.status, 200);
+      const body = await responseJson<{
+        items: Array<{ id: string }>;
+        nextCursor: string | null;
+      }>(page);
+      ids.push(...body.items.map((item) => item.id));
+      cursor = body.nextCursor;
+    } while (cursor);
     assert.ok(ids.includes(doctorCaseId));
     assert.ok(ids.includes(otherProviderCaseId));
   });

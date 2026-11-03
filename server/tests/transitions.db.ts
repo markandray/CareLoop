@@ -532,6 +532,63 @@ test('confirmation route can close NOT_CONFIRMED or proceed to referral after co
   }
 });
 
+test('receiving-provider transition response never contains clinical or origin-only content at any depth', async () => {
+  const item = await makeCase('REFERRAL_PENDING', false, 'REFERRAL', doctorOrigin);
+  await approvedExplanations(item.id);
+  const referral = await prisma.referral.create({
+    data: {
+      caseId: item.id,
+      fromProviderId: originId,
+      toProviderId: receivingId,
+      status: 'PENDING',
+      reason: 'Patient-safe referral reason.',
+      createdAt: now,
+      updatedAt: now,
+    },
+  });
+  await prisma.evidence.create({
+    data: {
+      caseId: item.id,
+      kind: 'SCREENING_INTAKE',
+      recordedBy: doctorOrigin,
+      details: {
+        preliminarySummary: 'PRIVATE_PRELIMINARY_SUMMARY',
+        originOnlyNotes: 'PRIVATE_ORIGIN_ONLY_NOTES',
+      },
+      createdAt: now,
+    },
+  });
+  await prisma.screeningCase.update({
+    where: { id: item.id },
+    data: {
+      resultCategory: 'PRIVATE_RESULT_CATEGORY',
+      resultSummaryApproved: 'PRIVATE_RESULT_SUMMARY',
+      reviewDraftSummary: null,
+      reviewDraftNextStep: null,
+      reviewDraftUrgencyLabel: null,
+    },
+  });
+  const response = await executeTransition(
+    dependencies,
+    actor(doctorReceiving, 'DOCTOR', receivingId),
+    item.id,
+    request('ACCEPT_REFERRAL', 'REFERRAL_PENDING', { referralId: referral.id }),
+  );
+  const serialized = JSON.stringify(response);
+  for (const forbidden of [
+    'resultCategory',
+    'resultSummaryApproved',
+    'preliminarySummary',
+    'originOnlyNotes',
+    'PRIVATE_RESULT_CATEGORY',
+    'PRIVATE_RESULT_SUMMARY',
+    'PRIVATE_PRELIMINARY_SUMMARY',
+    'PRIVATE_ORIGIN_ONLY_NOTES',
+  ]) {
+    assert.equal(serialized.includes(forbidden), false, `receiving response leaked ${forbidden}`);
+  }
+});
+
 async function provider(label: string) {
   return prisma.provider.create({ data: { name: `T105 ${label} ${suffix}`, type: ProviderType.HOSPITAL } });
 }
