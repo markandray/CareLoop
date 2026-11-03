@@ -30,8 +30,8 @@ export interface TransitionCaseSnapshot {
 export interface TransitionActor {
   role: Role;
   providerId: string | null;
-  /** Authenticated user ID, used only to derive clinician sign-off evidence. */
-  userId?: string;
+  /** Authenticated user ID, used to attribute user actions and clinician sign-off. */
+  userId: string;
 }
 
 export interface TransitionFacts {
@@ -76,6 +76,10 @@ export type TransitionOwner =
 export interface DerivedEvidence {
   kind: EvidenceKind;
   recordedBy: string;
+  clinicianSignOff: {
+    clinicianId: string;
+    signedAt: string;
+  };
   details: {
     closureReason: ClosureReason;
     signedAt: string;
@@ -246,16 +250,13 @@ export function evaluateTransition(
 
   const derivedEvidence: DerivedEvidence[] = [];
   if (definition.key.startsWith('CLOSE_') && definition.closureReason) {
-    if (!input.actor.userId) {
-      return {
-        ok: false,
-        code: 'EVIDENCE_MISSING',
-        details: { required: 'authenticatedActor.userId', observed: null },
-      };
-    }
     derivedEvidence.push({
       kind: 'CLINICIAN_SIGN_OFF',
       recordedBy: input.actor.userId,
+      clinicianSignOff: {
+        clinicianId: input.actor.userId,
+        signedAt: input.now.toISOString(),
+      },
       details: {
         closureReason: definition.closureReason,
         signedAt: input.now.toISOString(),

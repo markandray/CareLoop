@@ -379,6 +379,24 @@ describe('state machine table and evaluator', () => {
     });
   });
 
+  it('returns clinician sign-off evidence naming the authenticated closing doctor', () => {
+    const input = baseInput('CLOSE_REFERRAL_PATIENT_DECLINED');
+    const result = evaluateTransition(input);
+    expect(result).toMatchObject({
+      ok: true,
+      derivedEvidence: [
+        {
+          kind: 'CLINICIAN_SIGN_OFF',
+          recordedBy: USER_ID,
+          clinicianSignOff: {
+            clinicianId: USER_ID,
+            signedAt: FIXED_NOW.toISOString(),
+          },
+        },
+      ],
+    });
+  });
+
   it('allows closure by originating or consented receiving doctors after referral, but scopes earlier closures to origin', () => {
     const postReferral = [
       'CLOSE_REFERRAL_PATIENT_DECLINED',
