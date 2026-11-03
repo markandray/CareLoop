@@ -78,11 +78,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: authenticated case create/list/detail/event routes and HTTP integration tests.
 - Evidence (2026-11-03): added strict shared-schema routes under `/api/v1/cases`, mounted behind authentication, and added Compose DB HTTP tests. The tests also exposed and fixed Express 5 query getter mutation in validation middleware. See the T-104 evidence above for commands and live curl results.
 
-### [ ] T-105 Case transitions endpoint
+### [x] T-105 Case transitions endpoint
 - Agent: Codex. Depends: T-103, T-104
 - Output: `POST /cases/:id/transitions` applying the state machine, setting owner and `dueAt` from SLA config, writing events.
 - Accept: integration tests walk the full happy path; owner and `dueAt` change correctly at each step.
-- T-105a service-layer evidence (2026-11-04): added nullable persisted referral reason and appointment location in migration 9; rescheduling now accepts only SCHEDULED/MISSED, always requires delayReason, preserves MISSED status, and marks a prior SCHEDULED row RESCHEDULED. Added an exhaustive DB persistence matrix for all 24 executable transition keys, confirmation-route branches, each patient-declined closure, and a recursive receiving-provider response privacy check. Lint, build, unit tests (113), and DB tests (70/70) pass. T-105 remains open because the HTTP transitions endpoint and its route integration are still outstanding.
+- Evidence (2026-11-04): T-105a and T-105b are complete. Added the authenticated strict-schema transitions endpoint; the evaluator/service errors map to documented HTTP statuses, and success returns validated role projections (including `ReferralPacket` for receiving-provider users). HTTP DB tests cover the full journey, referral reassignment, every required error status/code, stale state, patient/admin denial, coordinator closure denial, strict body validation, receiving packet privacy, and concurrent requests. `npm run lint`, `npm run build`, `npm test` (113/113), and `npm run test:db` (74/74) pass. Live Compose curl returned 200 for `REVIEW_CASE` and 409 `CONFLICT` for replay with stale `expectedState`. README includes review and referral-acceptance curl examples.
 
 ---
 
