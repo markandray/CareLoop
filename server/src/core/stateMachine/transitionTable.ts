@@ -20,6 +20,8 @@ export type ProviderRelationship =
 
 export type TransitionFactKey =
   | 'caseAssignedToDoctor'
+  | 'reviewDraftExists'
+  | 'reviewRoute'
   | 'approvedExplanationExists'
   | 'resultReviewedDispatched'
   | 'confirmatoryResultExists'
@@ -103,7 +105,11 @@ const policies = {
   },
   REVIEW_CASE: {
     providerRules: ownDoctor,
-    requiredFacts: ['caseAssignedToDoctor', 'approvedExplanationExists'],
+    requiredFacts: [
+      'caseAssignedToDoctor',
+      'reviewDraftExists',
+      'approvedExplanationExists',
+    ],
     ownerAfter: queue('COORDINATOR', 'ORIGIN'),
     dueAtRule: { slaKey: 'notificationDispatch', base: 'NOW' },
     notificationTemplate: 'result_reviewed',
@@ -111,7 +117,7 @@ const policies = {
   },
   REQUEST_CONFIRMATION: {
     providerRules: { COORDINATOR: 'OWN_PROVIDER' },
-    requiredFacts: ['resultReviewedDispatched'],
+    requiredFacts: ['resultReviewedDispatched', 'reviewRoute'],
     ownerAfter: { kind: 'ASSIGNED_USER_OR_QUEUE', role: 'DOCTOR', provider: 'ORIGIN' },
     dueAtRule: { slaKey: 'confirmatoryResult', base: 'NOW' },
     notificationTemplate: 'awaiting_confirmation',
@@ -119,7 +125,7 @@ const policies = {
   },
   CREATE_REFERRAL_FROM_REVIEW: {
     providerRules: { COORDINATOR: 'SENDING_PROVIDER' },
-    requiredFacts: ['resultReviewedDispatched'],
+    requiredFacts: ['resultReviewedDispatched', 'reviewRoute'],
     ownerAfter: queue('COORDINATOR', 'RECEIVING'),
     dueAtRule: { slaKey: 'referralAcceptance', base: 'NOW' },
     notificationTemplate: 'referral_started',

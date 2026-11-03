@@ -36,6 +36,8 @@ export interface TransitionActor {
 
 export interface TransitionFacts {
   caseAssignedToDoctor?: boolean;
+  reviewDraftExists?: boolean;
+  reviewRoute?: 'CONFIRMATION' | 'REFERRAL' | null;
   approvedExplanationExists?: boolean;
   resultReviewedDispatched?: boolean;
   confirmatoryResultExists?: boolean;
@@ -113,6 +115,7 @@ export type TransitionEvaluation =
 
 const boolFactNames: ReadonlySet<TransitionFactKey> = new Set([
   'caseAssignedToDoctor',
+  'reviewDraftExists',
   'approvedExplanationExists',
   'resultReviewedDispatched',
   'confirmatoryResultExists',
@@ -191,6 +194,24 @@ export function evaluateTransition(
   const evidence = parsedEvidence.data as Record<string, unknown>;
 
   for (const factName of definition.requiredFacts) {
+    if (factName === 'reviewRoute') {
+      const expectedRoute =
+        input.transitionKey === 'REQUEST_CONFIRMATION'
+          ? 'CONFIRMATION'
+          : 'REFERRAL';
+      if (input.facts.reviewRoute !== expectedRoute) {
+        return {
+          ok: false,
+          code: 'EVIDENCE_MISSING',
+          details: {
+            required: 'reviewRoute',
+            expected: expectedRoute,
+            observed: input.facts.reviewRoute ?? null,
+          },
+        };
+      }
+      continue;
+    }
     if (factName === 'failedContactAttemptsForMilestone') {
       const observed = input.facts.failedContactAttemptsForMilestone ?? 0;
       const required = workflowConfig.thresholds.failedContactAttempts;
