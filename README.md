@@ -44,7 +44,7 @@ docker compose build server
 docker compose run --rm \
   -v "$PWD/server:/app/server" \
   -e 'DATABASE_URL=postgresql://careloop:careloop_local_only@db:5432/careloop_test?schema=public' \
-  server npm test
+  server npm run test:db
 ```
 
 Use the matching database credentials from `.env` if they differ from the local defaults. The tests only create synthetic records in `careloop_test`.
