@@ -15,7 +15,7 @@ export const workflowConfig = {
     appointmentScheduling: { ROUTINE: 7 * DAY_MS, URGENT: 48 * HOUR_MS },
     consultationResponse: { ROUTINE: 24 * HOUR_MS, URGENT: 4 * HOUR_MS },
     defaultFollowUpInterval: { ROUTINE: 30 * DAY_MS, URGENT: 30 * DAY_MS },
-    // Product Requirements §1.1 specifies appointment time + 2 days, without an urgency split.
+    // Product Requirements §8.2 specifies appointment time + 2 days for either urgency tier.
     appointmentAttendanceGrace: { ROUTINE: 2 * DAY_MS, URGENT: 2 * DAY_MS },
   },
   thresholds: {

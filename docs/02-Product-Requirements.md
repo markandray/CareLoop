@@ -407,6 +407,7 @@ Whenever an appointment is missed, rescheduled, or an SLA is breached, a mandato
 | Appointment scheduling window | 7 d | 48 h | Time window for receiving coordinator to book appointment after acceptance. |
 | Consultation response window | 24 h | 4 h | Time window for clinician to answer submitted consult. |
 | Default follow-up interval | 30 d | 30 d | Default interval for next milestone in `CARE_STARTED`. |
+| Appointment attendance grace period | 2 d | 2 d | Time after the scheduled appointment before attendance or non-attendance is due. |
 | Failed contact attempts threshold | 3 | 3 | Number of failed contact logs before raising repeated unreachable alert (+30). |
 | Reassignment escalation threshold | 3 | 3 | Number of referral reassignments before automatic LEVEL_2 escalation. |
 | **Escalation thresholds** | — | — | **Level 1**: Any SLA breach (`overdue > 0`) or consent revocation during active referral.<br>**Level 2**: `overdue >= 2 * SLA` OR 3 failed contacts OR 3 reassignments.<br>**Level 3**: `overdue >= 3 * SLA` OR Level 2 uncleared for >= 48h. |

@@ -423,6 +423,19 @@ describe('state machine table and evaluator', () => {
     expect(evaluateTransition(input)).toMatchObject({ ok: false, code: 'VALIDATION_ERROR' });
   });
 
+  it('uses the 2-day attendance grace period for appointment schedule dueAt', () => {
+    const appointmentTime = '2026-11-10T10:00:00.000Z';
+    for (const key of ['SCHEDULE_APPOINTMENT', 'RESCHEDULE_APPOINTMENT'] as const) {
+      const input = baseInput(key);
+      input.evidence = { scheduledAt: appointmentTime, location: 'Synthetic clinic' };
+      const result = evaluateTransition(input);
+      expect(result).toMatchObject({
+        ok: true,
+        dueAt: new Date(new Date(appointmentTime).getTime() + 2 * 24 * 60 * 60 * 1000),
+      });
+    }
+  });
+
   it('allows closure by originating or consented receiving doctors after referral, but scopes earlier closures to origin', () => {
     const postReferral = [
       'CLOSE_REFERRAL_PATIENT_DECLINED',
