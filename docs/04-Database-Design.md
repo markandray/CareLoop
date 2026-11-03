@@ -37,6 +37,7 @@ erDiagram
     Patient ||--o{ Consent : grants
     Provider ||--o{ Consent : receives_scope
     User o|--o{ AuditLog : acts
+    User o|--o{ SystemSetting : updates
 ```
 
 A case owner is one user **or** one role/provider queue. Both may be absent for an explicitly unassigned open case; PostgreSQL checks reject simultaneous user and queue ownership and incomplete queue ownership. `CLOSED` cases must have a closure reason and timestamp, and have no owner or due date.
@@ -58,6 +59,9 @@ A case owner is one user **or** one role/provider queue. Both may be absent for 
 - **ExplanationDraft** — localized template/LLM output and its draft/approval state, including the approving clinician and approval time.
 - **Consent** — patient authorization for a receiving provider and scope, retained as a grant/revocation record rather than overwritten.
 - **AuditLog** — append-only record of actor type, optional user actor ID, action, entity type/id, and time for security and administrative auditing. `SYSTEM` identifies automation; `USER` requires an actor ID.
+- **SystemSetting** — keyed JSON configuration with update time and optional user attribution. The demo clock offset is stored here so it survives a server restart; the same table backs admin configuration reads and writes.
+
+`SystemSetting` is added by the seventh, additive migration. The clock stores its millisecond offset as a JSON number under the stable `demoClockOffsetMs` key; changing or resetting the demo clock updates this row through Prisma.
 
 ## Enum contract
 
@@ -65,32 +69,32 @@ The enums `Role`, `ActorType`, `CaseState`, `FollowUpStatus`, `Urgency`, `Closur
 
 `EvidenceKind` is proposed from the lifecycle and closure evidence descriptions in spec sections 1.1 and 1.3:
 
-| Proposed value | Evidence represented |
-|---|---|
-| `SCREENING_INTAKE` | Screening type, finding category, preliminary summary, recommended action, and intake urgency. |
-| `APPROVED_CLINICAL_PLAN` | Clinician-approved summary, next step, urgency, and route. |
-| `APPROVED_EXPLANATION` | Explanation reviewed and approved by a clinician. |
-| `CONFIRMATION_TASK_CREATED` | Confirmatory task and its routing. |
-| `NOTIFICATION_DISPATCHED` | Required patient notification dispatch. |
-| `REFERRAL_CREATED` | New referral and receiving provider. |
-| `CONSENT_VERIFIED` | Active cross-provider consent used for a referral. |
-| `PATIENT_DECLINE` | Patient refusal and documented discussion/reason. |
-| `CONFIRMATORY_RESULT` | Confirmatory diagnostic result, including a negative/normal result. |
-| `REFERRAL_ACCEPTANCE` | Receiving provider acceptance. |
-| `REFERRAL_REJECTION` | Rejection and required reason. |
-| `REFERRAL_REASSIGNMENT` | New referral row, selected provider, and reassignment count. |
-| `APPOINTMENT_SCHEDULED` | Appointment date, time, location, and provider. |
-| `APPOINTMENT_ATTENDED` | Attendance recorded by the receiving coordinator. |
-| `APPOINTMENT_MISSED` | Missed appointment record. |
-| `DELAY_REASON` | Required reason for a reschedule, missed appointment, or SLA breach. |
-| `CONTACT_ATTEMPTS` | Contact attempt history supporting an unreachable closure. |
-| `ESCALATION_RECORD` | Escalation trail supporting an unreachable closure or action. |
-| `UNREACHABLE_STATUS` | Final unreachable status documentation. |
-| `EXTERNAL_TRANSFER` | External destination, receiving facility, and handover summary. |
-| `CARE_PLAN` | Treatment or ongoing surveillance plan. |
-| `CARE_COMPLETION` | Completed treatment, post-treatment findings, or completed surveillance evidence. |
-| `CLINICIAN_SIGN_OFF` | Clinician closure decision/sign-off. |
-| `CLOSURE_PROPOSAL` | Coordinator's proposed closure rationale and evidence. |
+| Proposed value              | Evidence represented                                                                           |
+| --------------------------- | ---------------------------------------------------------------------------------------------- |
+| `SCREENING_INTAKE`          | Screening type, finding category, preliminary summary, recommended action, and intake urgency. |
+| `APPROVED_CLINICAL_PLAN`    | Clinician-approved summary, next step, urgency, and route.                                     |
+| `APPROVED_EXPLANATION`      | Explanation reviewed and approved by a clinician.                                              |
+| `CONFIRMATION_TASK_CREATED` | Confirmatory task and its routing.                                                             |
+| `NOTIFICATION_DISPATCHED`   | Required patient notification dispatch.                                                        |
+| `REFERRAL_CREATED`          | New referral and receiving provider.                                                           |
+| `CONSENT_VERIFIED`          | Active cross-provider consent used for a referral.                                             |
+| `PATIENT_DECLINE`           | Patient refusal and documented discussion/reason.                                              |
+| `CONFIRMATORY_RESULT`       | Confirmatory diagnostic result, including a negative/normal result.                            |
+| `REFERRAL_ACCEPTANCE`       | Receiving provider acceptance.                                                                 |
+| `REFERRAL_REJECTION`        | Rejection and required reason.                                                                 |
+| `REFERRAL_REASSIGNMENT`     | New referral row, selected provider, and reassignment count.                                   |
+| `APPOINTMENT_SCHEDULED`     | Appointment date, time, location, and provider.                                                |
+| `APPOINTMENT_ATTENDED`      | Attendance recorded by the receiving coordinator.                                              |
+| `APPOINTMENT_MISSED`        | Missed appointment record.                                                                     |
+| `DELAY_REASON`              | Required reason for a reschedule, missed appointment, or SLA breach.                           |
+| `CONTACT_ATTEMPTS`          | Contact attempt history supporting an unreachable closure.                                     |
+| `ESCALATION_RECORD`         | Escalation trail supporting an unreachable closure or action.                                  |
+| `UNREACHABLE_STATUS`        | Final unreachable status documentation.                                                        |
+| `EXTERNAL_TRANSFER`         | External destination, receiving facility, and handover summary.                                |
+| `CARE_PLAN`                 | Treatment or ongoing surveillance plan.                                                        |
+| `CARE_COMPLETION`           | Completed treatment, post-treatment findings, or completed surveillance evidence.              |
+| `CLINICIAN_SIGN_OFF`        | Clinician closure decision/sign-off.                                                           |
+| `CLOSURE_PROPOSAL`          | Coordinator's proposed closure rationale and evidence.                                         |
 
 ## Index rationale
 
@@ -100,6 +104,7 @@ The enums `Role`, `ActorType`, `CaseState`, `FollowUpStatus`, `Urgency`, `Closur
 - `Referral(caseId)` is the required lookup for referral history by case; receiving/sending provider status indexes support provider queues.
 - Patient/provider case indexes support patient history and provider-scoped lists. Referral, appointment, contact attempt, follow-up, consult, consent, explanation, and audit indexes align with their owner/status/time or parent-record lookups.
 - Unique indexes on user email, patient user, synthetic MRN, provider name, and explanation `(caseId, language, createdAt)` prevent duplicate identities and duplicate drafts at the same timestamp for one language.
+- `SystemSetting.key` is the primary key, providing the unique lookup used by configuration and the clock.
 
 ## Append-only enforcement
 
