@@ -1,6 +1,6 @@
 # CareLoop
 
-CareLoop is a synthetic screening-to-care coordination prototype. The current server includes authentication, role checks, and the health endpoint; workflow modules are tracked in `TASKS.md`.
+CareLoop is a synthetic screening-to-care coordination prototype. The server includes authentication, role checks, case read/create APIs, and the case transition endpoint; remaining modules are tracked in `TASKS.md`.
 
 ## Requirements
 
@@ -93,6 +93,50 @@ rm cookies.txt
 `POST /cases` accepts only the strict `CREATE_CASE` request. The response contains
 the role-specific case DTO and its `CASE_CREATED` event. A doctor from another
 origin provider receives `404 NOT_FOUND` when reading the case.
+
+## Transition curl examples
+
+The transition endpoint uses the expected current state and a strict, key-specific
+evidence object. These examples assume the case has a saved doctor review draft and
+approved English/Arabic explanation drafts before `REVIEW_CASE`, and a current
+pending referral before `ACCEPT_REFERRAL`. Those prerequisites are created by the
+review/explanation and referral workflows; do not substitute server-derived IDs
+other than the approved explanation IDs or current referral ID shown here.
+
+```sh
+CASE_ID='CL-1001' # Replace with the human-readable ID of the prepared case.
+EN_EXPLANATION_ID='00000000-0000-0000-0000-000000000001'
+AR_EXPLANATION_ID='00000000-0000-0000-0000-000000000002'
+
+# Log in as the doctor assigned to the NEW case.
+curl -i -c doctor-cookies.txt http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"doctor.screening@careloop.local\",\"password\":\"$DEMO_PASSWORD\"}"
+
+# Save the approved review. The response contains the doctor role's case DTO and event.
+curl -i -b doctor-cookies.txt -X POST \
+  "http://localhost:4000/api/v1/cases/$CASE_ID/transitions" \
+  -H 'Content-Type: application/json' \
+  -d "{\"transitionKey\":\"REVIEW_CASE\",\"expectedState\":\"NEW\",\"evidence\":{\"approvedExplanationIds\":[\"$EN_EXPLANATION_ID\",\"$AR_EXPLANATION_ID\"]}}"
+
+# A current pending referral ID is returned in the origin-side REFERRAL_CREATED event.
+REFERRAL_ID='00000000-0000-0000-0000-000000000003' # Replace with that referral ID.
+curl -i -c receiving-cookies.txt http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"coordinator.hospital@careloop.local\",\"password\":\"$DEMO_PASSWORD\"}"
+
+# Accept the current referral as a coordinator at its receiving provider.
+curl -i -b receiving-cookies.txt -X POST \
+  "http://localhost:4000/api/v1/cases/$CASE_ID/transitions" \
+  -H 'Content-Type: application/json' \
+  -d "{\"transitionKey\":\"ACCEPT_REFERRAL\",\"expectedState\":\"REFERRAL_PENDING\",\"evidence\":{\"referralId\":\"$REFERRAL_ID\"}}"
+
+rm doctor-cookies.txt receiving-cookies.txt
+```
+
+The receiving-provider response is a `ReferralPacket`; its event payload is
+redacted. A stale `expectedState` returns `409 CONFLICT` in the standard error
+envelope.
 
 ## Tests
 
