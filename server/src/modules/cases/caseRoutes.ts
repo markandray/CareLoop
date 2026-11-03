@@ -8,12 +8,15 @@ import {
   CreateCaseRequestSchema,
   CaseListQuerySchema,
   CursorQuerySchema,
+  TransitionRequestSchema,
+  type TransitionRequest,
 } from '@careloop/shared';
 import type { Clock } from '../../core/clock';
 import { requireRole } from '../../middleware/role/roleMiddleware';
 import { validateBody, validateQuery } from '../../middleware/validate/validateRequest';
 import { projectStaffCaseEvent } from './caseProjection';
 import { createCase, getCase, listCaseEvents, listCases } from './caseService';
+import { executeTransition } from './transitionService';
 import type { CaseActor } from './caseVisibility';
 
 export function createCaseRouter(
@@ -46,6 +49,25 @@ export function createCaseRouter(
           event: projectStaffCaseEvent(eventRecord),
         });
         res.status(201).json(response);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/:id/transitions',
+    requireRole('DOCTOR', 'COORDINATOR'),
+    validateBody(TransitionRequestSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const response = await executeTransition(
+          { prisma, clock },
+          toCaseActor(req),
+          caseIdParam(req),
+          TransitionRequestSchema.parse(req.body) as TransitionRequest,
+        );
+        res.status(200).json(CaseTransitionResponseSchema.parse(response));
       } catch (error) {
         next(error);
       }
