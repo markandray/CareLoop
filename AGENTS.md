@@ -208,6 +208,7 @@ Rules for every agent:
 8. Explain non-obvious choices in comments and in `docs/`, in plain language.
 9. Draft the matching `docs/` section as you finish each feature.
 10. End each task with: what changed, how to run it, what is untested, what is next.
+11. Before updating TASKS.md and the AGENTS.md logs at the end of a task, run `git merge main` into your branch and resolve any conflict in the logs by keeping all rows from both sides. Then update the logs and commit.
 
 Code quality: validate every request with zod; consistent error format; no unnecessary abstractions; TypeScript strict; no `any` without a comment.
 
@@ -257,6 +258,7 @@ docs/
 
 | Date | Agent/model | Done | Next step |
 |---|---|---|---|
+| 2026-11-04 | Codex | T-105a transition service completed on `task/T-105-transitions`: added additive migration 8 for clinician review draft fields and retained review route; implemented DB-backed transition facts, `SELECT ... FOR UPDATE` serialized atomic transition execution, owned referral/appointment creation and reassignment, evidence/sign-off/event/delay notification/audit writes, and receiving-provider visibility limited to consented referral packets. Added Compose DB transition tests for the complete referral-to-care path, reassignment, permissions, expected-state conflicts, missing evidence, concurrency, and audit rollback. Full lint, build, 113 unit tests, and 42 DB tests pass. | T-105 remains open; add the transitions route and HTTP coverage. |
 | 2026-11-03 | Codex | T-103 patch completed on `task/T-103-state-machine`: clarified closure doctor provider scope with consent checks; retained assigned doctor ownership for confirmation; required actor user ID and named sign-off evidence; made START_CARE follow-up optional with a 30-day default and 180-day bound; added the 2-day appointment grace to §8.2/config; regenerated architecture docs and aligned API documentation. `npm run lint`, `npm run build`, and `npm test` passed (113 tests across four files). | Owner reviews the T-103 patch. |
 | 2026-11-03 | Codex | T-103 state machine completed on `task/T-103-state-machine`: centralized routine/urgent SLA and attention configuration; policy table covers every shared transition key; pure evaluator enforces state, role/provider, facts, evidence, consent, delay-reason, sign-off, and conflict rules. Added exhaustive pure-logic tests and generated `docs/03-System-Architecture.md` from the policy table. `npm run lint`, `npm run build`, and `npm test` passed (108 tests). Five interpretation gaps are documented in the architecture doc. | Owner reviews T-103; continue with T-104 case creation/read. |
 | 2026-11-03 | Codex | T-101 auth/RBAC completed on `task/T-101-auth-rbac`: fixed Prisma Client generation in the server image, moved dependency construction into `server.ts` with injected `createApp` dependencies, removed test-mode secret substitution, added explicit clock timestamps to seed upserts, renamed Vitest config, and completed the auth flow. Lint, workspace build, 48 unit tests, 18 DB/auth tests on `careloop_test`, Docker startup/logs, seed, health, and live login/logout checks passed. | Owner reviews T-101; continue with T-103 and then T-104. |
@@ -317,6 +319,8 @@ docs/
 | 39 | Evaluator actors always include the authenticated user ID, and CLOSE_* derives sign-off evidence naming that user and the supplied clock time | Makes clinician authorization auditable and explicit in the pure evaluation result |
 | 40 | START_CARE followUpAt is optional with a 30-day default; a supplied date must be within the next 180 days | Supports a standard follow-up while allowing clinician-selected timing within a bounded window |
 | 41 | Appointment attendance grace is configured as 2 days for routine and urgent cases and is added to the scheduled appointment time | Makes the documented attendance SLA explicit and centralizes the dueAt rule |
+| 42 | Review drafts are stored in nullable `ScreeningCase` draft columns while the case remains `NEW`; the selected route is stored in `reviewRoute` and retained after approval | Gives review-draft and post-review routing a queryable home without changing existing workflow enums or migrations |
+| 43 | A receiving-provider user sees a case only through a non-superseded referral and active cross-provider consent; case reads and transition responses use `ReferralPacket` projections | Gives the receiving team referral context without exposing origin-only notes or full case detail |
 
 ## 16. Resolved decisions
 
