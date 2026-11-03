@@ -82,7 +82,7 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Agent: Codex. Depends: T-103, T-104
 - Output: `POST /cases/:id/transitions` applying the state machine, setting owner and `dueAt` from SLA config, writing events.
 - Accept: integration tests walk the full happy path; owner and `dueAt` change correctly at each step.
-- T-105a service-layer evidence (2026-11-04): transition fact loading, row-locked atomic execution, referral/appointment/evidence/event/notification/audit writes, and active-consent receiving-provider packet projection are implemented. Lint, build, unit tests (113), and DB tests (42) pass. T-105 remains open because the HTTP transitions endpoint and its route integration are still outstanding.
+- T-105a service-layer evidence (2026-11-04): added nullable persisted referral reason and appointment location in migration 9; rescheduling now accepts only SCHEDULED/MISSED, always requires delayReason, preserves MISSED status, and marks a prior SCHEDULED row RESCHEDULED. Added an exhaustive DB persistence matrix for all 24 executable transition keys, confirmation-route branches, each patient-declined closure, and a recursive receiving-provider response privacy check. Lint, build, unit tests (113), and DB tests (70/70) pass. T-105 remains open because the HTTP transitions endpoint and its route integration are still outstanding.
 
 ---
 
