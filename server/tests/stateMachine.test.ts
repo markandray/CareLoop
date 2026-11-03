@@ -24,6 +24,8 @@ const FIXED_NOW = new Date('2026-11-03T12:00:00.000Z');
 
 const allFacts: TransitionFacts = {
   caseAssignedToDoctor: true,
+  reviewDraftExists: true,
+  reviewRoute: 'REFERRAL',
   approvedExplanationExists: true,
   resultReviewedDispatched: true,
   confirmatoryResultExists: true,
@@ -153,7 +155,10 @@ function baseInput(key: TransitionKey): EvaluateTransitionInput {
     expectedState: caseSnapshot.state,
     actor: { role, providerId: providerFor(role, key), userId: USER_ID },
     case: caseSnapshot,
-    facts: { ...allFacts },
+    facts: {
+      ...allFacts,
+      reviewRoute: key === 'REQUEST_CONFIRMATION' ? 'CONFIRMATION' : 'REFERRAL',
+    },
     evidence,
     delayReason:
       key === 'RESCHEDULE_APPOINTMENT' ? 'APPOINTMENT_RESCHEDULED' : undefined,

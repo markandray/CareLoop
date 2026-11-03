@@ -74,7 +74,7 @@ export async function loadFacts(
 
   const [
     assignedDoctor,
-    approvedExplanationCount,
+    approvedExplanationRows,
     reviewedNotificationEvent,
     confirmatoryEvidence,
     confirmatoryEvent,
@@ -97,9 +97,19 @@ export async function loadFacts(
           select: { id: true },
         })
       : Promise.resolve(null),
-    tx.explanationDraft.count({
-      where: { caseId: caseRecord.id, status: ExplanationStatus.APPROVED },
-    }),
+    (() => {
+      const ids = context.evidence.approvedExplanationIds;
+      return Array.isArray(ids) && ids.every((id) => typeof id === 'string')
+        ? tx.explanationDraft.findMany({
+            where: {
+              caseId: caseRecord.id,
+              id: { in: ids as string[] },
+              status: ExplanationStatus.APPROVED,
+            },
+            select: { id: true, language: true },
+          })
+        : Promise.resolve([] as Array<{ id: string; language: 'EN' | 'AR' | 'OTHER' }>);
+    })(),
     tx.caseEvent.findFirst({
       where: {
         caseId: caseRecord.id,
@@ -146,13 +156,15 @@ export async function loadFacts(
           select: { id: true },
         }),
     tx.contactAttempt.count({ where: milestoneWhere }),
-    tx.appointment.findFirst({
-      where: {
-        referral: { caseId: caseRecord.id },
-        status: AppointmentStatus.ATTENDED,
-      },
-      select: { id: true },
-    }),
+    currentReferral
+      ? tx.appointment.findFirst({
+          where: {
+            referralId: currentReferral.id,
+            status: AppointmentStatus.ATTENDED,
+          },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
     targetProviderId
       ? tx.consent.findFirst({
           where: {
@@ -181,10 +193,16 @@ export async function loadFacts(
       reviewRoute === 'CONFIRMATION' || reviewRoute === 'REFERRAL'
         ? reviewRoute
         : null,
-    approvedExplanationExists: approvedExplanationCount > 0,
+    approvedExplanationExists:
+      approvedExplanationRows.length === 2 &&
+      new Set(approvedExplanationRows.map((row) => row.language)).size === 2 &&
+      approvedExplanationRows.some((row) => row.language === 'EN') &&
+      approvedExplanationRows.some((row) => row.language === 'AR'),
     resultReviewedDispatched: Boolean(reviewedNotificationEvent),
     confirmatoryResultExists: Boolean(confirmatoryEvidence || confirmatoryEvent),
-    currentReferralExists: Boolean(currentReferral),
+    currentReferralExists:
+      Boolean(currentReferral) &&
+      (key !== 'ACCEPT_REFERRAL' || currentReferral?.status === ReferralStatus.PENDING),
     currentReferralAccepted: currentReferral?.status === ReferralStatus.ACCEPTED,
     currentReferralReassignable: currentReferral?.status === ReferralStatus.REJECTED,
     currentAppointmentExists: Boolean(currentAppointment),
@@ -205,9 +223,9 @@ export async function loadFacts(
       : null,
   };
 
-  // Keep the actor in the signature so fact policy can expand without callers changing shape.
+  // Referral destinations are explicit in the current request contract. The actor
+  // remains part of the loader context for provider-specific fact policies.
   void actor;
-  void key;
   return {
     facts,
     currentReferral: currentReferral
