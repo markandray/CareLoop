@@ -6,3 +6,522 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum Role {
+  PATIENT
+  DOCTOR
+  COORDINATOR
+  ADMIN
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+}
+
+enum CaseState {
+  NEW
+  CLINICIAN_REVIEWED
+  CONFIRMATION_PENDING
+  REFERRAL_PENDING
+  REFERRAL_ACCEPTED
+  APPOINTMENT_SCHEDULED
+  CARE_STARTED
+  CLOSED
+}
+
+enum FollowUpStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+enum Urgency {
+  ROUTINE
+  URGENT
+}
+
+enum ClosureReason {
+  COMPLETED_CARE
+  NOT_CONFIRMED
+  PATIENT_DECLINED
+  UNREACHABLE_AFTER_ATTEMPTS
+  TRANSFERRED_OUT
+}
+
+enum EscalationLevel {
+  LEVEL_0
+  LEVEL_1
+  LEVEL_2
+  LEVEL_3
+}
+
+enum ReferralStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  ATTENDED
+  MISSED
+  RESCHEDULED
+}
+
+enum ConsultKind {
+  PATIENT_TO_CLINICIAN
+  CLINICIAN_TO_CLINICIAN
+}
+
+enum ConsultStatus {
+  OPEN
+  ANSWERED
+}
+
+enum ExplanationStatus {
+  DRAFT
+  APPROVED
+}
+
+enum ExplanationSource {
+  TEMPLATE
+  LLM
+}
+
+enum Language {
+  EN
+  AR
+  OTHER
+}
+
+enum ProviderType {
+  SCREENING_CENTRE
+  HOSPITAL
+  CLINIC
+}
+
+enum ContactChannel {
+  PHONE
+  SMS
+  EMAIL
+  PORTAL
+}
+
+enum ContactOutcome {
+  REACHED
+  NO_ANSWER
+  FAILED
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+}
+
+enum ConsentScope {
+  CROSS_PROVIDER_REFERRAL
+}
+
+enum DelayReason {
+  PATIENT_UNREACHABLE
+  PROVIDER_DELAY
+  NO_SLOT_AVAILABLE
+  APPOINTMENT_RESCHEDULED
+  PATIENT_DECLINED
+  DOCUMENTATION_PENDING
+  TRANSPORT_OR_LOGISTICS
+  OTHER
+}
+
+enum NotificationTemplateKey {
+  result_reviewed
+  consent_needed
+  awaiting_confirmation
+  referral_started
+  referral_accepted
+  referral_reassigned
+  appointment_scheduled
+  appointment_rescheduled
+  care_started
+  care_closed
+  followup_due
+  unreachable_retry
+  consult_pending
+}
+
+enum CaseEventType {
+  CASE_CREATED
+  CASE_REVIEWED
+  CONFIRMATION_REQUESTED
+  REFERRAL_CREATED
+  CASE_CLOSED
+  REFERRAL_ACCEPTED
+  REFERRAL_REASSIGNED
+  APPOINTMENT_SCHEDULED
+  CARE_STARTED
+  APPOINTMENT_RESCHEDULED
+  OWNER_ASSIGNED
+  NOTIFICATION_QUEUED
+  NOTIFICATION_SENT
+  NOTIFICATION_ACKNOWLEDGED
+  UNDERSTANDING_CONFIRMED
+  CARE_DECLINED_BY_PATIENT
+  EXPLANATION_GENERATED
+  EXPLANATION_APPROVED
+  CONFIRMATORY_RESULT_RECORDED
+  APPOINTMENT_ATTENDED
+  APPOINTMENT_MISSED
+  CONTACT_ATTEMPT_LOGGED
+  REFERRAL_REJECTED
+  CONSULT_REQUESTED
+  CONSULT_ANSWERED
+  ESCALATION_RAISED
+  ESCALATION_CLEARED
+  CONSENT_GRANTED
+  CONSENT_REVOKED
+  DELAY_REASON_RECORDED
+  CLOSURE_PROPOSED
+}
+
+enum EvidenceKind {
+  SCREENING_INTAKE
+  APPROVED_CLINICAL_PLAN
+  APPROVED_EXPLANATION
+  CONFIRMATION_TASK_CREATED
+  NOTIFICATION_DISPATCHED
+  REFERRAL_CREATED
+  CONSENT_VERIFIED
+  PATIENT_DECLINE
+  CONFIRMATORY_RESULT
+  REFERRAL_ACCEPTANCE
+  REFERRAL_REJECTION
+  REFERRAL_REASSIGNMENT
+  APPOINTMENT_SCHEDULED
+  APPOINTMENT_ATTENDED
+  APPOINTMENT_MISSED
+  DELAY_REASON
+  CONTACT_ATTEMPTS
+  ESCALATION_RECORD
+  UNREACHABLE_STATUS
+  EXTERNAL_TRANSFER
+  CARE_PLAN
+  CARE_COMPLETION
+  CLINICIAN_SIGN_OFF
+  CLOSURE_PROPOSAL
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique @db.VarChar(320)
+  passwordHash String   @db.Text
+  role         Role
+  name         String   @db.VarChar(160)
+  providerId   String?  @db.Uuid
+  language     Language @default(EN)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  provider             Provider?          @relation("ProviderUsers", fields: [providerId], references: [id], onDelete: Restrict)
+  patientProfile       Patient?           @relation("PatientUser")
+  ownedCases           ScreeningCase[]    @relation("CaseUserOwner")
+  createdCases         ScreeningCase[]    @relation("CaseCreatedBy")
+  caseEvents           CaseEvent[]        @relation("CaseEventActor")
+  recordedEvidence     Evidence[]         @relation("EvidenceRecorder")
+  contactAttempts      ContactAttempt[]   @relation("ContactAttemptActor")
+  ownedFollowUps       FollowUp[]         @relation("FollowUpOwner")
+  requestedConsults    Consult[]          @relation("ConsultRequester")
+  targetedConsults     Consult[]          @relation("ConsultTarget")
+  approvedExplanations ExplanationDraft[] @relation("ExplanationApprover")
+  notifications        Notification[]
+  auditEntries         AuditLog[]         @relation("AuditActor")
+
+  @@index([providerId, role])
+}
+
+model Provider {
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String       @unique @db.VarChar(200)
+  type      ProviderType
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime     @updatedAt @db.Timestamptz(3)
+
+  users             User[]          @relation("ProviderUsers")
+  originatingCases  ScreeningCase[] @relation("CaseOriginProvider")
+  queueCases        ScreeningCase[] @relation("CaseQueueProvider")
+  outgoingReferrals Referral[]      @relation("ReferralFromProvider")
+  incomingReferrals Referral[]      @relation("ReferralToProvider")
+  consents          Consent[]
+}
+
+model Patient {
+  id                String         @id @default(uuid()) @db.Uuid
+  userId            String         @unique @db.Uuid
+  syntheticMrn      String         @unique @db.VarChar(40)
+  dateOfBirth       DateTime       @db.Date
+  preferredLanguage Language       @default(EN)
+  preferredChannel  ContactChannel @default(PORTAL)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @db.Timestamptz(3)
+
+  user     User            @relation("PatientUser", fields: [userId], references: [id], onDelete: Restrict)
+  cases    ScreeningCase[]
+  consents Consent[]
+
+  @@index([preferredLanguage])
+}
+
+model ScreeningCase {
+  // The database sequence starts at 1001, producing IDs such as CL-1001.
+  id                       String          @id @default(dbgenerated("('CL-'::text || lpad((nextval('screening_case_id_seq'::regclass))::text, 4, '0'::text))")) @db.VarChar(16)
+  patientId                String          @db.Uuid
+  originProviderId         String          @db.Uuid
+  createdById              String          @db.Uuid
+  pathway                  String          @db.VarChar(160)
+  screeningType            String          @db.VarChar(160)
+  resultCategory           String          @db.VarChar(160)
+  resultSummaryApproved    String?         @db.Text
+  recommendedNextStep      String?         @db.Text
+  intakeUrgency            Urgency
+  urgencyLabel             Urgency?
+  state                    CaseState       @default(NEW)
+  ownerUserId              String?         @db.Uuid
+  ownerQueueRole           Role?
+  ownerQueueProviderId     String?         @db.Uuid
+  dueAt                    DateTime?       @db.Timestamptz(3)
+  notifiedAt               DateTime?       @db.Timestamptz(3)
+  acknowledgedAt           DateTime?       @db.Timestamptz(3)
+  understandingConfirmedAt DateTime?       @db.Timestamptz(3)
+  escalationLevel          EscalationLevel @default(LEVEL_0)
+  escalatedAt              DateTime?       @db.Timestamptz(3)
+  reassignmentCount        Int             @default(0)
+  closureReason            ClosureReason?
+  closedAt                 DateTime?       @db.Timestamptz(3)
+  createdAt                DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime        @updatedAt @db.Timestamptz(3)
+
+  patient            Patient            @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  originProvider     Provider           @relation("CaseOriginProvider", fields: [originProviderId], references: [id], onDelete: Restrict)
+  createdBy          User               @relation("CaseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  ownerUser          User?              @relation("CaseUserOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  ownerQueueProvider Provider?          @relation("CaseQueueProvider", fields: [ownerQueueProviderId], references: [id], onDelete: Restrict)
+  events             CaseEvent[]
+  evidence           Evidence[]
+  referrals          Referral[]
+  contactAttempts    ContactAttempt[]
+  followUps          FollowUp[]
+  consults           Consult[]
+  notifications      Notification[]
+  explanations       ExplanationDraft[]
+
+  @@index([state, dueAt])
+  @@index([ownerUserId])
+  @@index([ownerQueueRole, ownerQueueProviderId])
+  @@index([patientId, createdAt])
+  @@index([originProviderId, state])
+  @@index([createdById])
+}
+
+model CaseEvent {
+  id        String        @id @default(uuid()) @db.Uuid
+  caseId    String        @db.VarChar(16)
+  type      CaseEventType
+  fromState CaseState?
+  toState   CaseState?
+  actorType ActorType     @default(USER)
+  actorId   String?       @db.Uuid
+  payload   Json?
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+
+  screeningCase ScreeningCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  actor         User?         @relation("CaseEventActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([caseId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model Evidence {
+  id         String       @id @default(uuid()) @db.Uuid
+  caseId     String       @db.VarChar(16)
+  kind       EvidenceKind
+  recordedBy String       @db.Uuid
+  details    Json
+  createdAt  DateTime     @default(now()) @db.Timestamptz(3)
+
+  screeningCase ScreeningCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  recorder      User          @relation("EvidenceRecorder", fields: [recordedBy], references: [id], onDelete: Restrict)
+
+  @@index([caseId, kind, createdAt])
+}
+
+model Referral {
+  id              String         @id @default(uuid()) @db.Uuid
+  caseId          String         @db.VarChar(16)
+  fromProviderId  String         @db.Uuid
+  toProviderId    String         @db.Uuid
+  status          ReferralStatus @default(PENDING)
+  rejectionReason String?        @db.Text
+  respondedAt     DateTime?      @db.Timestamptz(3)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
+
+  screeningCase   ScreeningCase    @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  fromProvider    Provider         @relation("ReferralFromProvider", fields: [fromProviderId], references: [id], onDelete: Restrict)
+  toProvider      Provider         @relation("ReferralToProvider", fields: [toProviderId], references: [id], onDelete: Restrict)
+  appointments    Appointment[]
+  contactAttempts ContactAttempt[]
+
+  @@index([caseId])
+  @@index([toProviderId, status, createdAt])
+  @@index([fromProviderId, status])
+}
+
+model Appointment {
+  id          String            @id @default(uuid()) @db.Uuid
+  referralId  String            @db.Uuid
+  scheduledAt DateTime          @db.Timestamptz(3)
+  status      AppointmentStatus @default(SCHEDULED)
+  delayReason DelayReason?
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(3)
+
+  referral        Referral         @relation(fields: [referralId], references: [id], onDelete: Restrict)
+  contactAttempts ContactAttempt[]
+
+  @@index([scheduledAt, status])
+  @@index([referralId, createdAt])
+}
+
+model ContactAttempt {
+  id             String         @id @default(uuid()) @db.Uuid
+  caseId         String         @db.VarChar(16)
+  byUserId       String         @db.Uuid
+  milestoneState CaseState
+  referralId     String?        @db.Uuid
+  appointmentId  String?        @db.Uuid
+  channel        ContactChannel
+  outcome        ContactOutcome
+  delayReason    DelayReason?
+  notes          String?        @db.Text
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+
+  screeningCase ScreeningCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  byUser        User          @relation("ContactAttemptActor", fields: [byUserId], references: [id], onDelete: Restrict)
+  referral      Referral?     @relation(fields: [referralId], references: [id], onDelete: Restrict)
+  appointment   Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+
+  @@index([caseId, milestoneState, outcome, createdAt])
+  @@index([referralId, milestoneState, outcome])
+  @@index([appointmentId, milestoneState, outcome])
+  @@index([byUserId, createdAt])
+}
+
+model FollowUp {
+  id        String         @id @default(uuid()) @db.Uuid
+  caseId    String         @db.VarChar(16)
+  action    String         @db.Text
+  dueAt     DateTime       @db.Timestamptz(3)
+  status    FollowUpStatus @default(OPEN)
+  ownerId   String         @db.Uuid
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime       @updatedAt @db.Timestamptz(3)
+
+  screeningCase ScreeningCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  owner         User          @relation("FollowUpOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@index([status, dueAt])
+  @@index([ownerId, status, dueAt])
+  @@index([caseId, dueAt])
+}
+
+model Consult {
+  id           String        @id @default(uuid()) @db.Uuid
+  caseId       String        @db.VarChar(16)
+  requesterId  String        @db.Uuid
+  targetUserId String        @db.Uuid
+  kind         ConsultKind
+  question     String        @db.Text
+  response     String?       @db.Text
+  status       ConsultStatus @default(OPEN)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  answeredAt   DateTime?     @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+
+  screeningCase ScreeningCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  requester     User          @relation("ConsultRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  target        User          @relation("ConsultTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+
+  @@index([caseId, status, createdAt])
+  @@index([targetUserId, status, createdAt])
+  @@index([requesterId, createdAt])
+}
+
+model Notification {
+  id          String                  @id @default(uuid()) @db.Uuid
+  caseId      String                  @db.VarChar(16)
+  userId      String                  @db.Uuid
+  channel     ContactChannel          @default(PORTAL)
+  language    Language
+  templateKey NotificationTemplateKey
+  status      NotificationStatus      @default(QUEUED)
+  createdAt   DateTime                @default(now()) @db.Timestamptz(3)
+  sentAt      DateTime?               @db.Timestamptz(3)
+
+  screeningCase ScreeningCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status])
+  @@index([caseId, createdAt])
+}
+
+model ExplanationDraft {
+  id         String            @id @default(uuid()) @db.Uuid
+  caseId     String            @db.VarChar(16)
+  language   Language
+  text       String            @db.Text
+  source     ExplanationSource @default(TEMPLATE)
+  status     ExplanationStatus @default(DRAFT)
+  approvedBy String?           @db.Uuid
+  createdAt  DateTime          @default(now()) @db.Timestamptz(3)
+  approvedAt DateTime?         @db.Timestamptz(3)
+  updatedAt  DateTime          @updatedAt @db.Timestamptz(3)
+
+  screeningCase ScreeningCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  approver      User?         @relation("ExplanationApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
+
+  @@unique([caseId, language, createdAt])
+  @@index([caseId, status])
+  @@index([approvedBy, approvedAt])
+}
+
+model Consent {
+  id         String       @id @default(uuid()) @db.Uuid
+  patientId  String       @db.Uuid
+  providerId String       @db.Uuid
+  scope      ConsentScope
+  grantedAt  DateTime     @default(now()) @db.Timestamptz(3)
+  revokedAt  DateTime?    @db.Timestamptz(3)
+
+  patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+
+  @@index([patientId, providerId, scope, revokedAt])
+  @@index([providerId, scope, grantedAt])
+}
+
+model AuditLog {
+  id         String    @id @default(uuid()) @db.Uuid
+  actorType  ActorType @default(USER)
+  actorId    String?   @db.Uuid
+  action     String    @db.VarChar(120)
+  entityType String    @db.VarChar(120)
+  entityId   String    @db.VarChar(160)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([action, createdAt])
+}

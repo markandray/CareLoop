@@ -12,15 +12,16 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 
 ## Phase 0 — Foundation (Days 1-2). NO feature code until T-001 to T-003 are approved by the Owner.
 
-### [ ] T-001 Product spec and lifecycle table
+### [x] T-001 Product spec and lifecycle table
 - Agent: Codex (draft) -> Claude (review) -> Owner (approve)
 - Output: `docs/02-Product-Requirements.md` containing the final lifecycle table (state, owner role, SLA, allowed transitions, who may trigger, required evidence, notifications), exception rules, role/permission matrix, attention rules list, metrics list with exact formulas.
 - Accept: matches AGENTS.md sections 6 and 8; every transition has an owner and evidence rule; open questions listed at the end.
 
-### [ ] T-002 Prisma schema and seed plan
+### [x] T-002 Prisma schema and seed plan
 - Agent: Codex. Depends: T-001
 - Output: `server/prisma/schema.prisma`, first migration, `docs/04-Database-Design.md` (ER diagram + why each table exists).
 - Accept: migration runs on a clean database; all entities in AGENTS.md section 7 present; `CaseEvent` has no update/delete code path.
+- T-002 follow-up patches: actor attribution uses `ActorType`, follow-ups use `FollowUpStatus`, delay reasons are recorded on corrective-action events, and the sixth migration adds escalation/referral response timestamps with checks; fresh six-migration run and append-only SQL checks passed (see AGENTS.md Progress log).
 
 ### [ ] T-003 API contract and shared types
 - Agent: Codex. Depends: T-001
