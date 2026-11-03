@@ -257,6 +257,8 @@ docs/
 
 | Date | Agent/model | Done | Next step |
 |---|---|---|---|
+| 2026-11-03 | Codex | T-004 scaffold created on `task/T-004-scaffold`: npm workspaces, strict TypeScript, lint/format config, Prisma package and empty module structure, Docker Compose, health endpoint, placeholder page, and README. `docker compose up --build -d` succeeded; `/health` returned HTTP 200 `{"status":"OK"}` and `/` returned HTTP 200 HTML. | Owner reviews T-004; continue Phase 0 tasks T-001 to T-003. |
+| 2026-11-03 | Codex | T-001 product requirements draft completed in `docs/02-Product-Requirements.md`; lifecycle, exceptions, roles, attention rules, and metrics align with AGENTS.md sections 6 and 8. | Claude review and owner approval before Phase 0 continues. |
 | — | — | Context files created. Nothing built yet. | Start Phase 0 (T-001) |
 
 ## 15. Decisions log (update whenever decided or changed)
@@ -275,6 +277,8 @@ docs/
 | 10 | Event log doubles as timeline and audit | One source of truth |
 | 11 | Provider and Consult entities included | Challenge requires cross-provider coordination |
 | 12 | English + Arabic (RTL) on patient portal only | Shows linguistic appropriateness at low cost |
+| 13 | Product requirements doc mirrors AGENTS lifecycle and analytics rules for T-001 | Keeps the spec aligned with the required workflow, permissions, and measurable outcomes |
+| 14 | PostgreSQL is exposed only on the Compose network in the scaffold | The server can reach the database while avoiding a host port conflict; no local DB client access is needed for T-004 |
 
 ## 16. Open questions (owner decides)
 

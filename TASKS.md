@@ -12,7 +12,7 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 
 ## Phase 0 — Foundation (Days 1-2). NO feature code until T-001 to T-003 are approved by the Owner.
 
-### [ ] T-001 Product spec and lifecycle table
+### [x] T-001 Product spec and lifecycle table
 - Agent: Codex (draft) -> Claude (review) -> Owner (approve)
 - Output: `docs/02-Product-Requirements.md` containing the final lifecycle table (state, owner role, SLA, allowed transitions, who may trigger, required evidence, notifications), exception rules, role/permission matrix, attention rules list, metrics list with exact formulas.
 - Accept: matches AGENTS.md sections 6 and 8; every transition has an owner and evidence rule; open questions listed at the end.
@@ -27,7 +27,7 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: `shared/` (enums, DTO types, zod schemas) and `docs/05-API-Documentation.md` listing every endpoint (method, path, roles allowed, request, response, errors).
 - Accept: Owner approves; frontend and backend will both import from `shared/`.
 
-### [ ] T-004 Repo scaffold
+### [x] T-004 Repo scaffold
 - Agent: Codex. Depends: none (can run in parallel with T-001)
 - Output: npm workspaces (`client`, `server`, `shared`), TypeScript strict, ESLint/Prettier, `docker-compose.yml` (postgres, server, client), `.env.example`, README with run steps, empty module folders per AGENTS.md section 5.
 - Accept: `docker compose up` starts all three; health endpoint returns OK; client loads a placeholder page.

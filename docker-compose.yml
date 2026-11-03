@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-careloop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-careloop_local_only}
+      POSTGRES_DB: ${POSTGRES_DB:-careloop}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-careloop} -d ${POSTGRES_DB:-careloop}',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      SERVER_PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-careloop}:${POSTGRES_PASSWORD:-careloop_local_only}@db:5432/${POSTGRES_DB:-careloop}?schema=public
+    ports:
+      - '${SERVER_PORT:-4000}:4000'
+    depends_on:
+      db:
+        condition: service_healthy
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    ports:
+      - '${CLIENT_PORT:-3000}:3000'
+    depends_on:
+      - server
+volumes:
+  postgres_data:
