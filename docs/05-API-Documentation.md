@@ -4,6 +4,20 @@ Version 1 is a JSON REST API rooted at `/api/v1`. All timestamps are ISO-8601 UT
 
 Request and response names below correspond to exported Zod schemas/types from `@careloop/shared`. Unknown object keys are rejected. Lists use `?cursor=<opaque>&limit=25` (1–100), return `{items, nextCursor, updatedAt}`; `updatedAt` is the UTC snapshot time for the list. Individual mutable items include their `updatedAt`. Errors use `{error:{code,message,details?}}`, with codes `INVALID_TRANSITION`, `EVIDENCE_MISSING`, `FORBIDDEN`, `CONSENT_REQUIRED`, `NOT_FOUND`, `VALIDATION_ERROR`, `UNAUTHENTICATED`, `DELAY_REASON_REQUIRED`, `RATE_LIMITED`, `CONFLICT`, and `INTERNAL_ERROR`. Invalid bodies return `400 VALIDATION_ERROR`; unauthenticated requests return `401 UNAUTHENTICATED`; authorization failures return `403 FORBIDDEN`; stale expected state returns `409 CONFLICT`; rate-limited login returns `429 RATE_LIMITED`.
 
+### Transition error mapping
+
+| Error code | HTTP status | When returned |
+| ---------- | ----------- | ------------- |
+| `VALIDATION_ERROR` | 400 | The strict `TransitionRequestSchema` rejects a body, or transition evidence fails its selected schema. |
+| `UNAUTHENTICATED` | 401 | The request has no valid session cookie. |
+| `FORBIDDEN` | 403 | The authenticated role is not DOCTOR/COORDINATOR for this route, or state-machine role/provider authorization fails. PATIENT and ADMIN are denied before request validation. |
+| `CONSENT_REQUIRED` | 403 | The state machine requires active cross-provider consent and none is active. |
+| `NOT_FOUND` | 404 | The case is absent or outside the caller's visibility; the route does not reveal which condition applies. |
+| `INVALID_TRANSITION` | 409 | The requested transition is not valid from the case's current state. |
+| `CONFLICT` | 409 | `expectedState` is stale or a related row changed before the operation could complete. |
+| `EVIDENCE_MISSING` | 422 | Request shape is valid but server-verified preconditions or evidence records are absent. |
+| `DELAY_REASON_REQUIRED` | 422 | A corrective action requires a delay reason that was not supplied. |
+
 ## Auth
 
 | Method and path     | Roles                  | Request                           | Response                                  | Errors / event or audit                                                        |

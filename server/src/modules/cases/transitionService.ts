@@ -457,9 +457,9 @@ function transitionError(
   const status =
     result.code === 'FORBIDDEN' || result.code === 'CONSENT_REQUIRED'
       ? 403
-      : result.code === 'CONFLICT'
+      : result.code === 'CONFLICT' || result.code === 'INVALID_TRANSITION'
         ? 409
-        : result.code === 'INVALID_TRANSITION' || result.code === 'EVIDENCE_MISSING'
+        : result.code === 'EVIDENCE_MISSING' || result.code === 'DELAY_REASON_REQUIRED'
           ? 422
           : 400;
   return new AppError(status, result.code, 'Case transition was rejected.', result.details);
