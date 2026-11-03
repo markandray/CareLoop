@@ -284,6 +284,10 @@ function validateProviderRelationship(
         (typeof (input.evidence as { originProviderId?: unknown } | null)?.originProviderId === 'string'
           ? (input.evidence as { originProviderId: string }).originProviderId
           : undefined)
+      : relationship === 'ORIGIN_OR_RECEIVING'
+        ? input.actor.providerId === input.case.originProviderId
+          ? input.case.originProviderId
+          : input.facts.currentReferral?.toProviderId ?? input.case.receivingProviderId ?? undefined
       : relationship === 'SENDING_PROVIDER'
         ? input.facts.currentReferral?.fromProviderId ?? input.case.sendingProviderId ?? input.case.originProviderId
         : targetProviderId(input, (input.evidence ?? {}) as Record<string, unknown>) ??
@@ -296,6 +300,13 @@ function validateProviderRelationship(
       code: 'FORBIDDEN',
       details: { requiredProviderRelationship: relationship, expectedProviderId: expectedProviderId ?? null },
     };
+  }
+  if (
+    relationship === 'ORIGIN_OR_RECEIVING' &&
+    expectedProviderId !== input.case.originProviderId &&
+    input.facts.receivingProviderConsentActive !== true
+  ) {
+    return { ok: false, code: 'CONSENT_REQUIRED' };
   }
   return null;
 }

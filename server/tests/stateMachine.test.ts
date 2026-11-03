@@ -126,6 +126,8 @@ function providerFor(role: Role, key: TransitionKey): string | null {
       return null;
     case 'RECEIVING_PROVIDER':
       return key === 'REASSIGN_REFERRAL' ? ORIGIN : RECEIVING;
+    case 'ORIGIN_OR_RECEIVING':
+      return ORIGIN;
     case 'SENDING_PROVIDER':
     case 'OWN_PROVIDER':
       return ORIGIN;
@@ -363,6 +365,41 @@ describe('state machine table and evaluator', () => {
       ok: false,
       code: 'FORBIDDEN',
     });
+  });
+
+  it('allows closure by originating or consented receiving doctors after referral, but scopes earlier closures to origin', () => {
+    const postReferral = [
+      'CLOSE_REFERRAL_PATIENT_DECLINED',
+      'CLOSE_REFERRAL_UNREACHABLE',
+      'CLOSE_REFERRAL_TRANSFERRED_OUT',
+      'CLOSE_ACCEPTED_REFERRAL_PATIENT_DECLINED',
+      'CLOSE_ACCEPTED_REFERRAL_UNREACHABLE',
+      'CLOSE_ACCEPTED_REFERRAL_TRANSFERRED_OUT',
+      'CLOSE_SCHEDULED_PATIENT_DECLINED',
+      'CLOSE_SCHEDULED_UNREACHABLE',
+      'CLOSE_SCHEDULED_TRANSFERRED_OUT',
+    ] as const;
+    for (const key of postReferral) {
+      const input = baseInput(key);
+      input.actor.providerId = RECEIVING;
+      expect(evaluateTransition(input), key).toMatchObject({ ok: true });
+      input.facts.receivingProviderConsentActive = false;
+      expect(evaluateTransition(input), key).toMatchObject({ ok: false, code: 'CONSENT_REQUIRED' });
+      input.actor.providerId = NEXT_PROVIDER;
+      expect(evaluateTransition(input), key).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    }
+
+    for (const key of ['CLOSE_AFTER_REVIEW_PATIENT_DECLINED', 'CLOSE_NOT_CONFIRMED', 'CLOSE_CONFIRMATION_PATIENT_DECLINED', 'CLOSE_CONFIRMATION_UNREACHABLE'] as const) {
+      const input = baseInput(key);
+      input.actor.providerId = RECEIVING;
+      expect(evaluateTransition(input), key).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    }
+
+    const careTransfer = baseInput('CLOSE_CARE_TRANSFERRED_OUT');
+    careTransfer.actor.providerId = ORIGIN;
+    expect(evaluateTransition(careTransfer)).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    careTransfer.actor.providerId = RECEIVING;
+    expect(evaluateTransition(careTransfer)).toMatchObject({ ok: true });
   });
 
   it('verifies an optional closure proposal when the caller references one', () => {

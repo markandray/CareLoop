@@ -14,6 +14,7 @@ import type { SlaKey } from '../../config/workflowConfig';
 export type ProviderRelationship =
   | 'ANY'
   | 'OWN_PROVIDER'
+  | 'ORIGIN_OR_RECEIVING'
   | 'SENDING_PROVIDER'
   | 'RECEIVING_PROVIDER';
 
@@ -168,17 +169,17 @@ const policies = {
     eventType: 'REFERRAL_REASSIGNED',
   },
   CLOSE_REFERRAL_PATIENT_DECLINED: {
-    providerRules: ownDoctor,
+    providerRules: { DOCTOR: 'ORIGIN_OR_RECEIVING' },
     requiredFacts: ['patientDeclineRecorded'],
     ...close('PATIENT_DECLINED'),
   },
   CLOSE_REFERRAL_UNREACHABLE: {
-    providerRules: ownDoctor,
+    providerRules: { DOCTOR: 'ORIGIN_OR_RECEIVING' },
     requiredFacts: ['failedContactAttemptsForMilestone', 'escalationEventExists'],
     ...close('UNREACHABLE_AFTER_ATTEMPTS'),
   },
   CLOSE_REFERRAL_TRANSFERRED_OUT: {
-    providerRules: ownDoctor,
+    providerRules: { DOCTOR: 'ORIGIN_OR_RECEIVING' },
     requiredFacts: [],
     ...close('TRANSFERRED_OUT'),
   },
@@ -191,17 +192,17 @@ const policies = {
     eventType: 'APPOINTMENT_SCHEDULED',
   },
   CLOSE_ACCEPTED_REFERRAL_PATIENT_DECLINED: {
-    providerRules: ownDoctor,
+    providerRules: { DOCTOR: 'ORIGIN_OR_RECEIVING' },
     requiredFacts: ['patientDeclineRecorded'],
     ...close('PATIENT_DECLINED'),
   },
   CLOSE_ACCEPTED_REFERRAL_UNREACHABLE: {
-    providerRules: ownDoctor,
+    providerRules: { DOCTOR: 'ORIGIN_OR_RECEIVING' },
     requiredFacts: ['failedContactAttemptsForMilestone', 'escalationEventExists'],
     ...close('UNREACHABLE_AFTER_ATTEMPTS'),
   },
   CLOSE_ACCEPTED_REFERRAL_TRANSFERRED_OUT: {
-    providerRules: ownDoctor,
+    providerRules: { DOCTOR: 'ORIGIN_OR_RECEIVING' },
     requiredFacts: [],
     ...close('TRANSFERRED_OUT'),
   },
@@ -222,17 +223,17 @@ const policies = {
     eventType: 'APPOINTMENT_RESCHEDULED',
   },
   CLOSE_SCHEDULED_PATIENT_DECLINED: {
-    providerRules: ownDoctor,
+    providerRules: { DOCTOR: 'ORIGIN_OR_RECEIVING' },
     requiredFacts: ['patientDeclineRecorded'],
     ...close('PATIENT_DECLINED'),
   },
   CLOSE_SCHEDULED_UNREACHABLE: {
-    providerRules: ownDoctor,
+    providerRules: { DOCTOR: 'ORIGIN_OR_RECEIVING' },
     requiredFacts: ['failedContactAttemptsForMilestone', 'escalationEventExists'],
     ...close('UNREACHABLE_AFTER_ATTEMPTS'),
   },
   CLOSE_SCHEDULED_TRANSFERRED_OUT: {
-    providerRules: ownDoctor,
+    providerRules: { DOCTOR: 'ORIGIN_OR_RECEIVING' },
     requiredFacts: [],
     ...close('TRANSFERRED_OUT'),
   },
@@ -242,7 +243,7 @@ const policies = {
     ...close('COMPLETED_CARE'),
   },
   CLOSE_CARE_TRANSFERRED_OUT: {
-    providerRules: ownDoctor,
+    providerRules: { DOCTOR: 'RECEIVING_PROVIDER' },
     requiredFacts: [],
     ...close('TRANSFERRED_OUT'),
   },
