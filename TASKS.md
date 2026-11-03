@@ -55,10 +55,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: `core/clock.ts` (injectable, persisted offset), `core/eventLog.ts` (append-only writer), `core/audit.ts`, and a shared transaction helper.
 - Accept: clock persistence, append/rollback, append-only database triggers, and actor constraints verified by the Compose-backed core tests; ESLint forbids direct wall-clock reads outside `core/clock.ts`.
 
-### [ ] T-103 State machine module
+### [x] T-103 State machine module
 - Agent: Codex. Depends: T-001, T-102
 - Output: `core/stateMachine.ts` as a transition table with actor-role rules and required evidence; unit tests.
 - Accept: every allowed transition tested; every disallowed transition rejected with a clear error; closure without evidence rejected; non-completed closure without clinician sign-off rejected.
+- Evidence (2026-11-03): centralized workflow SLA/attention configuration, a table covering every shared transition key, and a pure evaluator are committed. Generated architecture diagram and transition table via `npm run docs:state-machine`. `npm run lint`, `npm run build`, and `npm test` passed; Vitest reports 108 tests across four files. Ambiguous policy interpretations are documented as spec issues in `docs/03-System-Architecture.md`.
 
 ### [ ] T-104 Patients and cases (create/read)
 - Agent: Codex. Depends: T-101, T-102
