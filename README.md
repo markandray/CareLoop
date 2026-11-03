@@ -56,6 +56,44 @@ curl -i -b cookies.txt http://localhost:4000/api/v1/auth/me
 rm cookies.txt
 ```
 
+## Create and read a case with curl
+
+After seeding, look up the synthetic patient, screening provider, and doctor IDs
+inside the Compose database container. The defaults below match the checked-in
+`.env.example`; use your configured PostgreSQL user and database if you changed them.
+Load the local demo password into the shell before using the commands:
+
+```sh
+set -a; . ./.env; set +a
+```
+
+```sh
+PATIENT_ID="$(docker compose exec -T db psql -U careloop -d careloop -Atc \
+  'SELECT id FROM "Patient" WHERE "syntheticMrn" = '\''MRN-SYN-0001'\'';')"
+PROVIDER_ID="$(docker compose exec -T db psql -U careloop -d careloop -Atc \
+  'SELECT id FROM "Provider" WHERE name = '\''Abu Dhabi Prevention Screening Centre'\'';')"
+DOCTOR_ID="$(docker compose exec -T db psql -U careloop -d careloop -Atc \
+  'SELECT id FROM "User" WHERE email = '\''doctor.screening@careloop.local'\'';')"
+
+# Login and keep the httpOnly session cookie in the jar.
+curl -i -c cookies.txt http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"doctor.screening@careloop.local\",\"password\":\"$DEMO_PASSWORD\"}"
+
+# Create a case. Copy case.id from the JSON response into CASE_ID below.
+curl -i -b cookies.txt http://localhost:4000/api/v1/cases \
+  -H 'Content-Type: application/json' \
+  -d "{\"transitionKey\":\"CREATE_CASE\",\"evidence\":{\"patientId\":\"$PATIENT_ID\",\"originProviderId\":\"$PROVIDER_ID\",\"assignedDoctorId\":\"$DOCTOR_ID\",\"pathway\":\"Adult comprehensive screening, abnormal finding\",\"screeningType\":\"Comprehensive screening\",\"resultCategory\":\"Actionable synthetic finding\",\"preliminarySummary\":\"Synthetic intake summary for demonstration.\",\"recommendedAction\":\"Clinician review is required.\",\"intakeUrgency\":\"ROUTINE\"}}"
+
+CASE_ID='CL-1001' # Replace with the case.id returned above.
+curl -i -b cookies.txt "http://localhost:4000/api/v1/cases/$CASE_ID"
+rm cookies.txt
+```
+
+`POST /cases` accepts only the strict `CREATE_CASE` request. The response contains
+the role-specific case DTO and its `CASE_CREATED` event. A doctor from another
+origin provider receives `404 NOT_FOUND` when reading the case.
+
 ## Tests
 
 Run unit tests:
