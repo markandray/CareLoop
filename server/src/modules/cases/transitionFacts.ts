@@ -14,6 +14,7 @@ import type {
   TransitionFacts,
 } from '../../core/stateMachine/evaluateTransition';
 import type { TransitionActor } from '../../core/stateMachine/evaluateTransition';
+import { workflowConfig } from '../../config/workflowConfig';
 
 type Transaction = Prisma.TransactionClient;
 type CaseRecord = Prisma.ScreeningCaseGetPayload<object>;
@@ -186,6 +187,7 @@ export async function loadFacts(
       caseRecord.reviewDraftUrgencyLabel &&
       reviewRoute,
   );
+  const allowedRescheduleStatuses: readonly string[] = workflowConfig.reschedulableAppointmentStatuses;
   const facts: TransitionFacts = {
     caseAssignedToDoctor: Boolean(assignedDoctor),
     reviewDraftExists,
@@ -206,8 +208,9 @@ export async function loadFacts(
     currentReferralAccepted: currentReferral?.status === ReferralStatus.ACCEPTED,
     currentReferralReassignable: currentReferral?.status === ReferralStatus.REJECTED,
     currentAppointmentExists: Boolean(currentAppointment),
-    appointmentMissedOrRescheduleRequested:
-      currentAppointment?.status === AppointmentStatus.MISSED,
+    currentAppointmentReschedulable: Boolean(
+      currentAppointment && allowedRescheduleStatuses.includes(currentAppointment.status),
+    ),
     attendedAppointmentExists: Boolean(attendedAppointment),
     patientDeclineRecorded: Boolean(declineEvidence || declineEvent),
     closureProposalExists: Boolean(closureProposal),

@@ -45,7 +45,7 @@ export interface TransitionFacts {
   currentReferralAccepted?: boolean;
   currentReferralReassignable?: boolean;
   currentAppointmentExists?: boolean;
-  appointmentMissedOrRescheduleRequested?: boolean;
+  currentAppointmentReschedulable?: boolean;
   attendedAppointmentExists?: boolean;
   patientDeclineRecorded?: boolean;
   closureProposalExists?: boolean;
@@ -123,7 +123,7 @@ const boolFactNames: ReadonlySet<TransitionFactKey> = new Set([
   'currentReferralAccepted',
   'currentReferralReassignable',
   'currentAppointmentExists',
-  'appointmentMissedOrRescheduleRequested',
+  'currentAppointmentReschedulable',
   'attendedAppointmentExists',
   'patientDeclineRecorded',
   'closureProposalExists',

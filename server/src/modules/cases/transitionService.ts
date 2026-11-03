@@ -350,10 +350,16 @@ async function applyOwnedRows(
   } else if (key === 'SCHEDULE_APPOINTMENT' || key === 'RESCHEDULE_APPOINTMENT') {
     if (!currentReferral) throw AppError.notFound('Current referral not found.');
     if (key === 'RESCHEDULE_APPOINTMENT' && currentAppointment) {
-      await tx.appointment.update({
-        where: { id: currentAppointment.id },
-        data: { status: AppointmentStatus.RESCHEDULED, updatedAt: now },
-      });
+      if (currentAppointment.status === AppointmentStatus.SCHEDULED) {
+        await tx.appointment.update({
+          where: { id: currentAppointment.id },
+          data: {
+            status: AppointmentStatus.RESCHEDULED,
+            delayReason: delayReason ?? null,
+            updatedAt: now,
+          },
+        });
+      }
       relatedIds.previousAppointmentId = currentAppointment.id;
     }
     const appointment = await tx.appointment.create({

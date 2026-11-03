@@ -29,7 +29,7 @@ export type TransitionFactKey =
   | 'currentReferralAccepted'
   | 'currentReferralReassignable'
   | 'currentAppointmentExists'
-  | 'appointmentMissedOrRescheduleRequested'
+  | 'currentAppointmentReschedulable'
   | 'attendedAppointmentExists'
   | 'patientDeclineRecorded'
   | 'closureProposalExists'
@@ -223,7 +223,7 @@ const policies = {
   },
   RESCHEDULE_APPOINTMENT: {
     providerRules: { COORDINATOR: 'RECEIVING_PROVIDER' },
-    requiredFacts: ['currentAppointmentExists', 'appointmentMissedOrRescheduleRequested'],
+    requiredFacts: ['currentAppointmentExists', 'currentAppointmentReschedulable'],
     ownerAfter: queue('COORDINATOR', 'RECEIVING'),
     dueAtRule: { slaKey: 'appointmentAttendanceGrace', base: 'SCHEDULED_AT' },
     notificationTemplate: 'appointment_rescheduled',

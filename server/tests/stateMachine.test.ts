@@ -33,7 +33,7 @@ const allFacts: TransitionFacts = {
   currentReferralAccepted: true,
   currentReferralReassignable: true,
   currentAppointmentExists: true,
-  appointmentMissedOrRescheduleRequested: true,
+  currentAppointmentReschedulable: true,
   attendedAppointmentExists: true,
   patientDeclineRecorded: true,
   closureProposalExists: true,
@@ -331,6 +331,13 @@ describe('state machine table and evaluator', () => {
     expect(evaluateTransition(reassignment).ok).toBe(true);
 
     const reschedule = baseInput('RESCHEDULE_APPOINTMENT');
+    reschedule.facts.currentAppointmentReschedulable = false;
+    expect(evaluateTransition(reschedule)).toMatchObject({
+      ok: false,
+      code: 'EVIDENCE_MISSING',
+      details: { required: 'currentAppointmentReschedulable' },
+    });
+    reschedule.facts.currentAppointmentReschedulable = true;
     reschedule.delayReason = undefined;
     expect(evaluateTransition(reschedule)).toMatchObject({
       ok: false,

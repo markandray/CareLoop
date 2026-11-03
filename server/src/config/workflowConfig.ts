@@ -18,6 +18,7 @@ export const workflowConfig = {
     // Product Requirements §8.2 specifies appointment time + 2 days for either urgency tier.
     appointmentAttendanceGrace: { ROUTINE: 2 * DAY_MS, URGENT: 2 * DAY_MS },
   },
+  reschedulableAppointmentStatuses: ['SCHEDULED', 'MISSED'] as const,
   thresholds: {
     failedContactAttempts: 3,
     referralReassignments: 3,

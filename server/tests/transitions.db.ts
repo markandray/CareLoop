@@ -205,6 +205,84 @@ test('rejected referral reassignment supersedes the old row and resets ownership
   });
 });
 
+test('rescheduling allows SCHEDULED or MISSED only and preserves prior status semantics', async () => {
+  for (const priorStatus of ['SCHEDULED', 'MISSED'] as const) {
+    const item = await makeCase('APPOINTMENT_SCHEDULED', false, null, doctorReceiving);
+    await approvedExplanations(item.id);
+    const referral = await prisma.referral.create({
+      data: {
+        caseId: item.id,
+        fromProviderId: originId,
+        toProviderId: receivingId,
+        status: 'ACCEPTED',
+        respondedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    const previous = await prisma.appointment.create({
+      data: {
+        referralId: referral.id,
+        scheduledAt: new Date(now.getTime() + 24 * 60 * 60_000),
+        status: priorStatus,
+        location: 'Prior location',
+        delayReason: priorStatus === 'MISSED' ? 'PATIENT_UNREACHABLE' : null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    const newScheduledAt = new Date(now.getTime() + 10 * 24 * 60 * 60_000);
+    await executeTransition(
+      dependencies,
+      actor(coordinatorReceiving, 'COORDINATOR', receivingId),
+      item.id,
+      {
+        ...request('RESCHEDULE_APPOINTMENT', 'APPOINTMENT_SCHEDULED', {
+          scheduledAt: newScheduledAt.toISOString(),
+          location: 'New location',
+        }),
+        delayReason: 'APPOINTMENT_RESCHEDULED',
+      },
+    );
+    const previousAfter = await prisma.appointment.findUniqueOrThrow({ where: { id: previous.id } });
+    const created = await prisma.appointment.findMany({ where: { referralId: referral.id, id: { not: previous.id } } });
+    assert.equal(previousAfter.status, priorStatus === 'SCHEDULED' ? 'RESCHEDULED' : 'MISSED');
+    assert.equal(created.length, 1);
+    assert.equal(created[0]?.status, 'SCHEDULED');
+    assert.equal(created[0]?.scheduledAt.toISOString(), newScheduledAt.toISOString());
+    assert.equal(created[0]?.location, 'New location');
+    assert.equal(created[0]?.delayReason, 'APPOINTMENT_RESCHEDULED');
+    await assertCase(item.id, 'APPOINTMENT_SCHEDULED', 'COORDINATOR', receivingId, 2 * 24 * 60 * 60_000, newScheduledAt);
+  }
+
+  const attendedCase = await makeCase('APPOINTMENT_SCHEDULED', false, null, doctorReceiving);
+  const referral = await prisma.referral.create({
+    data: {
+      caseId: attendedCase.id,
+      fromProviderId: originId,
+      toProviderId: receivingId,
+      status: 'ACCEPTED',
+      respondedAt: now,
+    },
+  });
+  const attended = await prisma.appointment.create({
+    data: { referralId: referral.id, scheduledAt: now, status: 'ATTENDED' },
+  });
+  const before = await counts(attendedCase.id);
+  await assertCode(
+    executeTransition(dependencies, actor(coordinatorReceiving, 'COORDINATOR', receivingId), attendedCase.id, {
+      ...request('RESCHEDULE_APPOINTMENT', 'APPOINTMENT_SCHEDULED', {
+        scheduledAt: new Date(now.getTime() + 5 * 24 * 60 * 60_000).toISOString(),
+        location: 'Replacement location',
+      }),
+      delayReason: 'APPOINTMENT_RESCHEDULED',
+    }),
+    'EVIDENCE_MISSING',
+  );
+  assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: attended.id } })).status, 'ATTENDED');
+  await assertCounts(attendedCase.id, before);
+});
+
 test('wrong role, stale state, missing closure fact, and coordinator closure write nothing', async () => {
   const item = await makeCase('NEW', true, 'REFERRAL', doctorOrigin);
   const baseline = await counts(item.id);
