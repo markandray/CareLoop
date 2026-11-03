@@ -33,7 +33,6 @@ import {
   projectPatientCaseEvent,
   projectStaffCaseEvent,
   type CaseDetailProjection,
-  type CaseProjectionRecord,
 } from './caseProjection';
 import { caseVisibility, type CaseActor } from './caseVisibility';
 
@@ -259,11 +258,11 @@ export async function listCaseEvents(
     if (!parent) throw AppError.notFound('Case not found.');
 
     const clauses: Prisma.CaseEventWhereInput[] = [{ caseId: parent.id }];
-    if (cursor) clauses.push(eventCursorWhere(cursor, 'desc'));
+    if (cursor) clauses.push(eventCursorWhere(cursor, 'asc'));
     const events = await tx.caseEvent.findMany({
       where: { AND: clauses },
       include: { actor: true },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: parsed.limit + 1,
     });
     await writeAudit(dependencies)(

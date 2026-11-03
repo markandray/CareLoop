@@ -20,7 +20,10 @@ export function caseVisibility(
     case 'DOCTOR':
     case 'COORDINATOR':
       // Missing provider affiliation must fail closed and match no case.
-      return { originProviderId: actor.providerId ?? '__no_provider__' };
+      return {
+        originProviderId:
+          actor.providerId ?? '00000000-0000-0000-0000-000000000000',
+      };
     case 'ADMIN':
       return {};
   }

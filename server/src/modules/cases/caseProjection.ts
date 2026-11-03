@@ -4,7 +4,6 @@ import {
   type CaseState,
   type ClosureReason,
   type Language,
-  type Role,
 } from '@prisma/client';
 import {
   CaseDetailAdminSchema,
@@ -205,7 +204,6 @@ export function projectCaseForActor(
         events: row.events.map(projectStaffCaseEvent),
       });
     case 'COORDINATOR': {
-      const patientCopy = currentPatientCopy(row);
       const approvedExplanation =
         latestExplanationFor(approvedExplanations, row.patient.preferredLanguage) ??
         latestExplanationFor(approvedExplanations, 'EN') ??
