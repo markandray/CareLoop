@@ -23,10 +23,12 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Accept: migration runs on a clean database; all entities in AGENTS.md section 7 present; `CaseEvent` has no update/delete code path.
 - T-002 follow-up patches: actor attribution uses `ActorType`, follow-ups use `FollowUpStatus`, delay reasons are recorded on corrective-action events, and the sixth migration adds escalation/referral response timestamps with checks; fresh six-migration run and append-only SQL checks passed (see AGENTS.md Progress log).
 
-### [ ] T-003 API contract and shared types
+### [x] T-003 API contract and shared types
 - Agent: Codex. Depends: T-001
 - Output: `shared/` (enums, DTO types, zod schemas) and `docs/05-API-Documentation.md` listing every endpoint (method, path, roles allowed, request, response, errors).
 - Accept: Owner approves; frontend and backend will both import from `shared/`.
+- Evidence (2026-11-03): strict shared TypeScript build, ESLint, and Vitest pass; all lifecycle rows map one-to-one to transition keys; server test confirms shared Zod enum parity with Prisma. Vitest was absent and added as a root dev dependency. Owner branch review remains pending.
+- T-003 patch evidence (2026-11-03): removed client-supplied derived transition facts, added `expectedState`, review draft/generation, safe event projections, provider/follow-up contracts, tightened authentication and updated route docs. Shared build and lint pass; 47 tests pass. No Prisma files or routes changed.
 
 ### [x] T-004 Repo scaffold
 - Agent: Codex. Depends: none (can run in parallel with T-001)

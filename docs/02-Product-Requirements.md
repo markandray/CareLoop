@@ -42,6 +42,8 @@ A case begins at ingestion/creation (`none -> NEW`) and progresses through the l
 
 *Note on Case Assignment*: When a case is created in state `NEW` without an assigned doctor, or when an open case needs reassignment, the action **"Assign case owner"** may be performed by a COORDINATOR or ADMIN. This is an audited in-state action that sets `ownerUserId` and emits an `OWNER_ASSIGNED` event.
 
+Both exits from `CLINICIAN_REVIEWED` (`CONFIRMATION_PENDING` and `REFERRAL_PENDING`) require a `NOTIFICATION_SENT` event for `result_reviewed`; closing from `CLINICIAN_REVIEWED` does not.
+
 ---
 
 ### 1.2 In-state events (non-transition)
