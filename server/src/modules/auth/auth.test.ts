@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient, type Role } from '@prisma/client';
 import { DatabaseClock } from '../../core/clock';
+import { realSystemTimeMs } from '../../core/realTime';
 import { validateEnv } from '../../config/env';
 import { createApp } from '../../app';
 import { resetRateLimiter } from './rateLimiter';
@@ -313,7 +314,7 @@ describe('T-101 Auth and RBAC test suite', () => {
 
   test('7. a token whose user was deleted is rejected (reloaded from DB)', async () => {
     // 1. Create temporary user with unique email
-    const tempEmail = `temp.deleted.user.${Date.now()}.${Math.random().toString(36).substring(2)}@careloop.test`;
+    const tempEmail = `temp.deleted.user.${realSystemTimeMs()}.${Math.random().toString(36).substring(2)}@careloop.test`;
     const passwordHash = await bcrypt.hash(TEST_PASSWORD, 10);
     const tempUser = await prisma.user.create({
       data: {

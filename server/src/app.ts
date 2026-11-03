@@ -1,11 +1,11 @@
 import express, { type Express, type Router } from 'express';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import { PrismaClient } from '@prisma/client';
 import { RoleSchema, type Role } from '@careloop/shared';
 
-import { getEnv, type Env } from './config/env';
-import { DatabaseClock, type Clock } from './core/clock';
+import type { PrismaClient } from '@prisma/client';
+import type { Env } from './config/env';
+import type { Clock } from './core/clock';
 import { errorHandler, AppError } from './middleware/error/errorHandler';
 import { jsonBodyOnly } from './middleware/body/jsonBodyMiddleware';
 import { createOriginMiddleware } from './middleware/origin/originMiddleware';
@@ -18,33 +18,16 @@ export interface AppContext {
   prisma: PrismaClient;
   clock: Clock;
   env: Env;
-  authService: AuthService;
-  authenticate: ReturnType<typeof createAuthMiddleware>;
 }
 
 export function createApp(
-  customContext?: Partial<AppContext>,
+  context: AppContext,
   customTestRoutes?: (router: Router, ctx: AppContext) => void,
 ): Express {
-  const env = customContext?.env ?? getEnv();
-  const prisma = customContext?.prisma ?? new PrismaClient();
-  const clock =
-    customContext?.clock ?? new DatabaseClock(prisma.systemSetting);
-
-  const authService =
-    customContext?.authService ??
-    new AuthService(prisma, clock, env.JWT_SECRET);
-  const authenticate =
-    customContext?.authenticate ??
-    createAuthMiddleware(prisma, env.JWT_SECRET);
-
-  const ctx: AppContext = {
-    prisma,
-    clock,
-    env,
-    authService,
-    authenticate,
-  };
+  const { prisma, clock, env } = context;
+  const authService = new AuthService(prisma, clock, env.JWT_SECRET);
+  const authenticate = createAuthMiddleware(prisma, env.JWT_SECRET);
+  const ctx: AppContext = context;
 
   const app = express();
 
@@ -112,10 +95,3 @@ export function createApp(
 
   return app;
 }
-
-// Default application instance for server startup
-const defaultPrisma = new PrismaClient();
-export const clock = new DatabaseClock(defaultPrisma.systemSetting);
-export const app = createApp({ prisma: defaultPrisma, clock });
-
-export default app;

@@ -7,6 +7,7 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY server ./server
 COPY shared ./shared
+RUN npm run generate --workspace server
 WORKDIR /app/server
 EXPOSE 4000
 CMD ["npm", "run", "dev"]

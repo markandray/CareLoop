@@ -53,10 +53,11 @@ export async function runSeed(): Promise<void> {
 
   const providers = [];
   for (const def of providerDefs) {
+    const now = clock.now();
     const provider = await prisma.provider.upsert({
       where: { name: def.name },
-      update: { type: def.type },
-      create: { name: def.name, type: def.type },
+      update: { type: def.type, updatedAt: now },
+      create: { name: def.name, type: def.type, createdAt: now, updatedAt: now },
     });
     providers.push(provider);
     console.log(`Provider upserted: ${provider.name} (${provider.type}) [${provider.id}]`);
@@ -138,6 +139,7 @@ export async function runSeed(): Promise<void> {
   ];
 
   for (const def of userDefs) {
+    const now = clock.now();
     const providerId =
       def.providerIndex !== undefined ? providers[def.providerIndex].id : null;
 
@@ -149,6 +151,7 @@ export async function runSeed(): Promise<void> {
         providerId,
         language: def.language,
         passwordHash,
+        updatedAt: now,
       },
       create: {
         email: def.email,
@@ -157,12 +160,15 @@ export async function runSeed(): Promise<void> {
         providerId,
         language: def.language,
         passwordHash,
+        createdAt: now,
+        updatedAt: now,
       },
     });
 
     console.log(`User upserted: ${user.email} (${user.role}) [${user.id}]`);
 
     if (def.patientProfile) {
+      const profileNow = clock.now();
       const patient = await prisma.patient.upsert({
         where: { userId: user.id },
         update: {
@@ -170,6 +176,7 @@ export async function runSeed(): Promise<void> {
           dateOfBirth: def.patientProfile.dateOfBirth,
           preferredLanguage: def.patientProfile.preferredLanguage,
           preferredChannel: def.patientProfile.preferredChannel,
+          updatedAt: profileNow,
         },
         create: {
           userId: user.id,
@@ -177,6 +184,8 @@ export async function runSeed(): Promise<void> {
           dateOfBirth: def.patientProfile.dateOfBirth,
           preferredLanguage: def.patientProfile.preferredLanguage,
           preferredChannel: def.patientProfile.preferredChannel,
+          createdAt: profileNow,
+          updatedAt: profileNow,
         },
       });
       console.log(

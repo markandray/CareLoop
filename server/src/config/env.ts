@@ -37,28 +37,7 @@ export function validateEnv(
   return parsed.data;
 }
 
-// Evaluated at startup: the application refuses to start without valid environment configuration
-let cachedEnv: Env | null = null;
-
 export function getEnv(): Env {
-  if (!cachedEnv) {
-    cachedEnv = validateEnv(process.env);
-  }
-  return cachedEnv;
+  return validateEnv(process.env);
 }
-
-export const env: Env = (function initEnv(): Env {
-  // If NODE_ENV is test and JWT_SECRET is not provided, do not crash on module load of test files
-  // that specifically test validateEnv failure; but allow regular initialization
-  if (
-    process.env.NODE_ENV === 'test' &&
-    (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)
-  ) {
-    // In test environment without explicit JWT_SECRET, provide a safe test fallback so other imports succeed,
-    // while unit tests can call validateEnv() directly to test refusal to start.
-    process.env.JWT_SECRET =
-      'careloop_local_test_jwt_secret_must_be_at_least_32_chars_long';
-  }
-  return getEnv();
-})();
 

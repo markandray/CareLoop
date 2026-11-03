@@ -8,6 +8,7 @@ import { withTransaction } from '../../core/withTransaction';
 import { AppError } from '../../middleware/error/errorHandler';
 import { isLoginRateLimited, recordLoginFailure } from './rateLimiter';
 import type { TokenPayload } from '../../middleware/auth/authMiddleware';
+import { realSystemTimeMs } from '../../core/realTime';
 
 // Pre-computed dummy hash to ensure timing-insensitive comparison when user is not found
 const DUMMY_HASH = bcrypt.hashSync('careloop_dummy_timing_mitigation_pass', 10);
@@ -100,9 +101,13 @@ export class AuthService {
       role: user.role,
     };
 
-    const token = jwt.sign(tokenPayload, this.jwtSecret, {
+    const token = jwt.sign(
+      { ...tokenPayload, iat: Math.floor(realSystemTimeMs() / 1000) },
+      this.jwtSecret,
+      {
       expiresIn: '7d',
-    });
+      },
+    );
 
     const userSession: UserSession = {
       id: user.id,
