@@ -199,6 +199,7 @@ export const AppointmentSummarySchema = StrictObject({
   scheduledAt: UtcTimestampSchema,
   status: AppointmentStatusSchema,
   delayReason: DelayReasonSchema.nullable(),
+  location: z.string().nullable().optional(),
   updatedAt: UtcTimestampSchema,
 });
 export type AppointmentSummary = z.infer<typeof AppointmentSummarySchema>;
@@ -291,6 +292,7 @@ export const ReferralPacketSchema = StrictObject({
   patient: PatientSummarySchema,
   referralReason: z.string(),
   approvedExplanation: ExplanationDtoSchema,
+  recommendedNextStep: z.string().nullable(),
   urgencyLabel: UrgencySchema,
   receivingProvider: ProviderSummarySchema,
   status: ReferralStatusSchema,
@@ -452,6 +454,7 @@ export const CaseTransitionResponseSchema = StrictObject({
     CaseDetailDoctorSchema,
     CaseDetailCoordinatorSchema,
     CaseDetailAdminSchema,
+    ReferralPacketSchema,
   ]),
   event: CaseEventDtoStaffSchema,
 });

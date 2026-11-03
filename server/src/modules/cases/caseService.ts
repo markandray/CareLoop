@@ -10,6 +10,7 @@ import {
 import {
   CaseCursorPageSchema,
   CaseEventPatientCursorPageSchema,
+  CaseEventDtoStaffSchema,
   CaseEventStaffCursorPageSchema,
   CaseListQuerySchema,
   CursorQuerySchema,
@@ -30,9 +31,11 @@ import {
   caseListInclude,
   projectCaseForActor,
   projectCaseListItem,
+  projectReferralPacket,
   projectPatientCaseEvent,
   projectStaffCaseEvent,
   type CaseDetailProjection,
+  type CaseReadableProjection,
 } from './caseProjection';
 import { caseVisibility, type CaseActor } from './caseVisibility';
 
@@ -173,7 +176,7 @@ export async function listCases(
   const parsed = CaseListQuerySchema.parse(query);
   const cursor = parsed.cursor ? decodeCursor(parsed.cursor) : undefined;
   const now = dependencies.clock.now();
-  const clauses: Prisma.ScreeningCaseWhereInput[] = [caseVisibility(actor)];
+  const clauses: Prisma.ScreeningCaseWhereInput[] = [caseVisibility(actor, now)];
   if (parsed.state) clauses.push({ state: parsed.state });
   if (parsed.ownerUserId) clauses.push({ ownerUserId: parsed.ownerUserId });
   if (parsed.updatedSince) clauses.push({ updatedAt: { gte: new Date(parsed.updatedSince) } });
@@ -220,10 +223,11 @@ export async function getCase(
   dependencies: CaseServiceDependencies,
   actor: CaseActor,
   id: string,
-): Promise<CaseDetailProjection> {
+): Promise<CaseReadableProjection> {
   return withTransaction(dependencies.prisma, async (tx) => {
+    const now = dependencies.clock.now();
     const row = await tx.screeningCase.findFirst({
-      where: { AND: [{ id }, caseVisibility(actor)] },
+      where: { AND: [{ id }, caseVisibility(actor, now)] },
       include: caseDetailInclude,
     });
     if (!row) throw AppError.notFound('Case not found.');
@@ -238,6 +242,20 @@ export async function getCase(
       },
       dependencies.clock,
     );
+    if (isReceivingProviderActor(actor, row.originProviderId)) {
+      const referral = row.referrals.find(
+        (item) => item.toProviderId === actor.providerId && item.status !== 'SUPERSEDED',
+      );
+      if (!referral) throw AppError.notFound('Case not found.');
+      const evidence = await tx.evidence.findMany({
+        where: { caseId: row.id },
+        select: { details: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      });
+      const referralReason = evidenceString(evidence, 'referralId', referral.id, 'referralReason') ?? '';
+      const locations = appointmentLocations(evidence);
+      return projectReferralPacket(row, referral, referralReason, locations);
+    }
     return projectCaseForActor(row, actor);
   });
 }
@@ -252,8 +270,8 @@ export async function listCaseEvents(
   const cursor = parsed.cursor ? decodeCursor(parsed.cursor) : undefined;
   return withTransaction(dependencies.prisma, async (tx) => {
     const parent = await tx.screeningCase.findFirst({
-      where: { AND: [{ id }, caseVisibility(actor)] },
-      select: { id: true, state: true, closureReason: true },
+      where: { AND: [{ id }, caseVisibility(actor, dependencies.clock.now())] },
+      select: { id: true, state: true, closureReason: true, originProviderId: true },
     });
     if (!parent) throw AppError.notFound('Case not found.');
 
@@ -288,7 +306,12 @@ export async function listCaseEvents(
       });
     }
     return CaseEventStaffCursorPageSchema.parse({
-      items: page.items.map(projectStaffCaseEvent),
+      items: page.items.map((event) => {
+        const dto = projectStaffCaseEvent(event);
+        return isReceivingProviderActor(actor, parent.originProviderId)
+          ? CaseEventDtoStaffSchema.parse({ ...dto, payload: null })
+          : dto;
+      }),
       nextCursor: page.nextCursor,
       updatedAt,
     });
@@ -426,5 +449,44 @@ function eventCursorWhere(
       { createdAt: cursor.createdAt, id: idFilter },
     ],
   };
+}
+
+function isReceivingProviderActor(actor: CaseActor, originProviderId: string): boolean {
+  return (actor.role === 'DOCTOR' || actor.role === 'COORDINATOR') &&
+    actor.providerId !== null && actor.providerId !== originProviderId;
+}
+
+function evidenceObject(value: Prisma.JsonValue): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function evidenceString(
+  evidence: Array<{ details: Prisma.JsonValue }>,
+  parentIdKey: string,
+  parentId: string,
+  field: string,
+): string | null {
+  for (const item of evidence) {
+    const details = evidenceObject(item.details);
+    if (details?.[parentIdKey] !== parentId) continue;
+    const nested = evidenceObject(details.evidence as Prisma.JsonValue);
+    if (typeof nested?.[field] === 'string') return nested[field];
+  }
+  return null;
+}
+
+function appointmentLocations(
+  evidence: Array<{ details: Prisma.JsonValue }>,
+): Record<string, string> {
+  const locations: Record<string, string> = {};
+  for (const item of evidence) {
+    const details = evidenceObject(item.details);
+    const nested = details ? evidenceObject(details.evidence as Prisma.JsonValue) : null;
+    if (typeof details?.appointmentId === 'string' && typeof nested?.location === 'string') {
+      locations[details.appointmentId] = nested.location;
+    }
+  }
+  return locations;
 }
 

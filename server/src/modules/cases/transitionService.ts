@@ -27,6 +27,7 @@ import { transitionTable } from '../../core/stateMachine/transitionTable';
 import {
   caseDetailInclude,
   projectCaseForActor,
+  projectReferralPacket,
   projectStaffCaseEvent,
 } from './caseProjection';
 import { caseVisibility, type CaseActor } from './caseVisibility';
@@ -57,17 +58,17 @@ export async function executeTransition(
 ): Promise<CaseTransitionResponse> {
   const transition = request as TransitionRow;
   return withTransaction(deps.prisma, async (tx) => {
+    const now = deps.clock.now();
     const locked = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "ScreeningCase" WHERE "id" = ${caseId} FOR UPDATE
     `;
     if (locked.length === 0) throw AppError.notFound('Case not found.');
 
     const caseRecord = await tx.screeningCase.findFirst({
-      where: { AND: [{ id: caseId }, caseVisibility(actor)] },
+      where: { AND: [{ id: caseId }, caseVisibility(actor, now)] },
     });
     if (!caseRecord) throw AppError.notFound('Case not found.');
 
-    const now = deps.clock.now();
     const loaded = await loadFacts(tx, caseRecord, transition.transitionKey, {
       userId: actor.userId,
       role: actor.role,
@@ -251,10 +252,42 @@ export async function executeTransition(
       where: { id: event.id },
       include: { actor: true },
     });
-    return CaseTransitionResponseSchema.parse({
-      case: projectCaseForActor(updatedCase, actor),
-      event: projectStaffCaseEvent(eventWithActor),
-    });
+    let projectedCase;
+    let projectedEvent = projectStaffCaseEvent(eventWithActor);
+    if (
+      (actor.role === 'DOCTOR' || actor.role === 'COORDINATOR') &&
+      actor.providerId !== null && actor.providerId !== updatedCase.originProviderId
+    ) {
+      const referral = updatedCase.referrals.find(
+        (item) => item.toProviderId === actor.providerId && item.status !== ReferralStatus.SUPERSEDED,
+      );
+      if (!referral) throw AppError.notFound('Case not found.');
+      const evidenceRows = await tx.evidence.findMany({
+        where: { caseId },
+        select: { details: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      });
+      const matching = evidenceRows.map(({ details }) => jsonRecord(details));
+      const reasonRow = matching.find((details) => details.referralId === referral.id);
+      const reasonEvidence = reasonRow ? jsonRecord(reasonRow.evidence) : {};
+      const locations: Record<string, string> = {};
+      for (const details of matching) {
+        const evidenceData = jsonRecord(details.evidence);
+        if (typeof details.appointmentId === 'string' && typeof evidenceData.location === 'string') {
+          locations[details.appointmentId] = evidenceData.location;
+        }
+      }
+      projectedCase = projectReferralPacket(
+        updatedCase,
+        referral,
+        typeof reasonEvidence.referralReason === 'string' ? reasonEvidence.referralReason : '',
+        locations,
+      );
+      projectedEvent = { ...projectedEvent, payload: null };
+    } else {
+      projectedCase = projectCaseForActor(updatedCase, actor);
+    }
+    return CaseTransitionResponseSchema.parse({ case: projectedCase, event: projectedEvent });
   });
 }
 
@@ -451,6 +484,11 @@ function asEvidenceRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+function jsonRecord(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
 }
 
 function delayEntity(

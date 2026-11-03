@@ -13,6 +13,7 @@ import {
   CaseEventDtoPatientSchema,
   CaseEventDtoStaffSchema,
   CaseListItemSchema,
+  ReferralPacketSchema,
   type CaseDetailAdmin,
   type CaseDetailCoordinator,
   type CaseDetailDoctor,
@@ -20,6 +21,7 @@ import {
   type CaseEventDtoPatient,
   type CaseEventDtoStaff,
   type CaseListItem,
+  type ReferralPacket,
 } from '@careloop/shared';
 import type { CaseActor } from './caseVisibility';
 
@@ -56,6 +58,8 @@ export type CaseDetailProjection =
   | CaseDetailDoctor
   | CaseDetailCoordinator
   | CaseDetailAdmin;
+
+export type CaseReadableProjection = CaseDetailProjection | ReferralPacket;
 
 const stateCopy: Record<CaseState, { label: string; description: string }> = {
   NEW: {
@@ -258,6 +262,41 @@ export function projectCaseListItem(row: CaseListProjectionRecord): CaseListItem
     escalationLevel: row.escalationLevel,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  });
+}
+
+export function projectReferralPacket(
+  row: CaseProjectionRecord,
+  referral: CaseProjectionRecord['referrals'][number],
+  referralReason: string,
+  appointmentLocations: Readonly<Record<string, string>> = {},
+): ReferralPacket {
+  const approved = row.explanations.filter(
+    (explanation) => explanation.status === 'APPROVED',
+  );
+  const explanation =
+    latestExplanationFor(approved, row.patient.preferredLanguage) ??
+    latestExplanationFor(approved, 'EN') ??
+    (approved[0] ? explanationDto(approved[0]) : null);
+  if (!explanation) {
+    throw new Error('A receiving-provider referral packet requires an approved explanation.');
+  }
+  return ReferralPacketSchema.parse({
+    referralId: referral.id,
+    caseId: row.id,
+    patient: patientSummary(row),
+    referralReason,
+    approvedExplanation: explanation,
+    recommendedNextStep: row.recommendedNextStep,
+    urgencyLabel: row.urgencyLabel,
+    receivingProvider: providerSummary(referral.toProvider),
+    status: referral.status,
+    respondedAt: iso(referral.respondedAt),
+    appointments: referral.appointments.map((appointment) => ({
+      ...appointmentSummary(appointment),
+      location: appointmentLocations[appointment.id] ?? null,
+    })),
+    updatedAt: referral.updatedAt.toISOString(),
   });
 }
 

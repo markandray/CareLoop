@@ -1,4 +1,4 @@
-import type { Prisma, Role } from '@prisma/client';
+import { ConsentScope, ReferralStatus, type Prisma, type Role } from '@prisma/client';
 
 export interface CaseActor {
   userId: string;
@@ -8,11 +8,12 @@ export interface CaseActor {
 
 /**
  * Returns the database scope for case reads. Admin scope grants visibility only;
- * callers must still authorize any write separately. Receiving-provider case
- * access through referral packets is deferred to T-201.
+ * callers must still authorize any write separately. Receiving-provider scope
+ * requires a current referral and active cross-provider consent.
  */
 export function caseVisibility(
   actor: CaseActor,
+  now: Date,
 ): Prisma.ScreeningCaseWhereInput {
   switch (actor.role) {
     case 'PATIENT':
@@ -20,10 +21,41 @@ export function caseVisibility(
     case 'DOCTOR':
     case 'COORDINATOR':
       // Missing provider affiliation must fail closed and match no case.
-      return {
-        originProviderId:
-          actor.providerId ?? '00000000-0000-0000-0000-000000000000',
-      };
+      {
+        const providerId =
+          actor.providerId ?? '00000000-0000-0000-0000-000000000000';
+        return {
+          OR: [
+            { originProviderId: providerId },
+            {
+              AND: [
+                {
+                  referrals: {
+                    some: {
+                      toProviderId: providerId,
+                      status: { not: ReferralStatus.SUPERSEDED },
+                    },
+                  },
+                },
+                {
+                  patient: {
+                    is: {
+                      consents: {
+                        some: {
+                          providerId,
+                          scope: ConsentScope.CROSS_PROVIDER_REFERRAL,
+                          grantedAt: { lte: now },
+                          OR: [{ revokedAt: null }, { revokedAt: { gt: now } }],
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        };
+      }
     case 'ADMIN':
       return {};
   }
