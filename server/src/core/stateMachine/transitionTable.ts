@@ -32,6 +32,7 @@ export type TransitionFactKey =
   | 'closureProposalExists'
   | 'escalationEventExists'
   | 'failedContactAttemptsForMilestone'
+  | 'caseOverdue'
   | 'receivingProviderConsentActive';
 
 export type OwnerRule =
@@ -152,7 +153,7 @@ const policies = {
   },
   ACCEPT_REFERRAL: {
     providerRules: { DOCTOR: 'RECEIVING_PROVIDER', COORDINATOR: 'RECEIVING_PROVIDER' },
-    requiredFacts: ['currentReferralExists', 'receivingProviderConsentActive'],
+    requiredFacts: ['currentReferralExists'],
     ownerAfter: queue('COORDINATOR', 'RECEIVING'),
     dueAtRule: { slaKey: 'appointmentScheduling', base: 'NOW' },
     notificationTemplate: 'referral_accepted',
