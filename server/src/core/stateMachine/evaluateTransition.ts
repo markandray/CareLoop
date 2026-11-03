@@ -22,6 +22,7 @@ export interface TransitionCaseSnapshot {
   originProviderId?: string | null;
   sendingProviderId?: string | null;
   receivingProviderId?: string | null;
+  ownerUserId?: string | null;
   intakeUrgency?: Urgency;
   urgencyLabel?: Urgency | null;
 }
@@ -334,6 +335,9 @@ function resolveOwner(
     return typeof userId === 'string'
       ? { ok: true, owner: { kind: 'USER', userId } }
       : { ok: true, owner: { kind: 'UNASSIGNED' } };
+  }
+  if (rule.kind === 'ASSIGNED_USER_OR_QUEUE' && input.case.ownerUserId) {
+    return { ok: true, owner: { kind: 'USER', userId: input.case.ownerUserId } };
   }
   const providerId =
     rule.provider === 'ORIGIN'

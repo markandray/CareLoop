@@ -367,6 +367,18 @@ describe('state machine table and evaluator', () => {
     });
   });
 
+  it('keeps the assigned doctor as owner after entering CONFIRMATION_PENDING, otherwise uses the origin doctor queue', () => {
+    const input = baseInput('REQUEST_CONFIRMATION');
+    const assigned = evaluateTransition(input);
+    expect(assigned).toMatchObject({ ok: true, owner: { kind: 'QUEUE', role: 'DOCTOR', providerId: ORIGIN } });
+
+    input.case.ownerUserId = USER_ID;
+    expect(evaluateTransition(input)).toMatchObject({
+      ok: true,
+      owner: { kind: 'USER', userId: USER_ID },
+    });
+  });
+
   it('allows closure by originating or consented receiving doctors after referral, but scopes earlier closures to origin', () => {
     const postReferral = [
       'CLOSE_REFERRAL_PATIENT_DECLINED',

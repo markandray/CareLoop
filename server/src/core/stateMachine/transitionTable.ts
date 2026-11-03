@@ -39,6 +39,7 @@ export type TransitionFactKey =
 export type OwnerRule =
   | { kind: 'NONE' }
   | { kind: 'USER_FROM_EVIDENCE'; evidenceField: 'assignedDoctorId' }
+  | { kind: 'ASSIGNED_USER_OR_QUEUE'; role: Role; provider: 'ORIGIN' }
   | {
       kind: 'QUEUE';
       role: Role;
@@ -111,7 +112,7 @@ const policies = {
   REQUEST_CONFIRMATION: {
     providerRules: { COORDINATOR: 'OWN_PROVIDER' },
     requiredFacts: ['resultReviewedDispatched'],
-    ownerAfter: queue('DOCTOR', 'ORIGIN'),
+    ownerAfter: { kind: 'ASSIGNED_USER_OR_QUEUE', role: 'DOCTOR', provider: 'ORIGIN' },
     dueAtRule: { slaKey: 'confirmatoryResult', base: 'NOW' },
     notificationTemplate: 'awaiting_confirmation',
     eventType: 'CONFIRMATION_REQUESTED',
