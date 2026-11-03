@@ -257,6 +257,8 @@ docs/
 
 | Date | Agent/model | Done | Next step |
 |---|---|---|---|
+| 2026-11-03 | Codex | Updated `docs/02-Product-Requirements.md` escalation routing and role definitions; replaced product open questions with owner decisions. Recorded the same decisions below. | Continue with the next approved Phase 0 task. |
+| 2026-11-03 | Antigravity | T-001 patched in `docs/02-Product-Requirements.md`: `intakeUrgency`, case creation row & assignment action, full 15-row closure transition table, receiving coordinator queue ownership in `REFERRAL_PENDING`, attention overdue bonus formula & state fallback mapping, strict escalation criteria & admin boundaries, approved explanation gate for `CLINICIAN_REVIEWED`, manual `result_reviewed` dispatch, 9 lifecycle/audit events, consent revocation policy & `consent_needed` template, configuration defaults, DOCTOR/COORDINATOR permission refinement, consolidated visibility scopes, and cohort-defined rate metrics. | Review patched spec; proceed to T-002 (Prisma schema & seed plan). |
 | 2026-11-03 | Codex | T-004 scaffold created on `task/T-004-scaffold`: npm workspaces, strict TypeScript, lint/format config, Prisma package and empty module structure, Docker Compose, health endpoint, placeholder page, and README. `docker compose up --build -d` succeeded; `/health` returned HTTP 200 `{"status":"OK"}` and `/` returned HTTP 200 HTML. | Owner reviews T-004; continue Phase 0 tasks T-001 to T-003. |
 | 2026-11-03 | Codex | T-001 product requirements draft completed in `docs/02-Product-Requirements.md`; lifecycle, exceptions, roles, attention rules, and metrics align with AGENTS.md sections 6 and 8. | Claude review and owner approval before Phase 0 continues. |
 | — | — | Context files created. Nothing built yet. | Start Phase 0 (T-001) |
@@ -279,13 +281,24 @@ docs/
 | 12 | English + Arabic (RTL) on patient portal only | Shows linguistic appropriateness at low cost |
 | 13 | Product requirements doc mirrors AGENTS lifecycle and analytics rules for T-001 | Keeps the spec aligned with the required workflow, permissions, and measurable outcomes |
 | 14 | PostgreSQL is exposed only on the Compose network in the scaffold | The server can reach the database while avoiding a host port conflict; no local DB client access is needed for T-004 |
+| 15 | intakeUrgency sets initial review SLA; doctor review confirms urgencyLabel governing all later SLAs | Separates preliminary lab/screening urgency from definitive clinician judgment |
+| 16 | Receiving provider's coordinator queue owns REFERRAL_PENDING while sending coordinator retains reassign rights | Ensures intake accountability at the receiving facility while preserving reassignment authority |
+| 17 | ADMIN may assign owner to unassigned cases but cannot resolve escalations | Keeps clinical and operational escalation governance with clinicians and coordinators |
+| 18 | Rate metrics restricted to cases created > 30 days ago or closed cases | Eliminates right-censoring bias from active/recent cases |
+| 19 | LEVEL_1 routes to the COORDINATOR queue; LEVEL_2 routes to the DOCTOR and COORDINATOR queues; LEVEL_3 routes to the DOCTOR queue, including the originating doctor, and sends an ADMIN notification | Escalation routing names accountable roles without introducing additional role types |
+| 20 | Demo pathway is “Adult comprehensive screening, abnormal finding” | Provides one consistent illustrative pathway for the demo |
+| 21 | Local Docker is the primary hosting path, decided on Day 18 | Keeps the primary run path reproducible and aligned with the project setup |
+| 22 | Explanation output is template-only by default; an optional provider remains behind the interface | Provides safe, deterministic behavior without requiring an external service |
+| 23 | Notifications use one in-app center with a simulated channel label | Keeps delivery within the prototype scope while showing channel metadata |
+| 24 | Arabic explanations show an inline banner and footer note stating the text is not clinically reviewed | Makes the translation limitation visible where patients read the explanation |
 
-## 16. Open questions (owner decides)
+## 16. Resolved decisions
 
-- Which screening pathway label to use in the demo (e.g. adult comprehensive screening, abnormal finding)?
-- Hosting target for the live demo?
-- Reuse auth/RBAC scaffolding from an existing personal project, or start clean?
-- Is an LLM key available for the optional explanation rewrite, or template-only?
+- Pathway: Adult comprehensive screening, abnormal finding.
+- Hosting: Decided on Day 18; local Docker is the primary path.
+- LLM: Template-only by default; optional provider behind the interface.
+- Outbox: One in-app notification center with a simulated channel label.
+- Arabic: Inline banner on the explanation plus a footer note; not clinically reviewed.
 
 ## 17. Resuming with a different model
 
