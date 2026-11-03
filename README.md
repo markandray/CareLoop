@@ -1,50 +1,79 @@
 # CareLoop
 
-CareLoop is a screening-to-care coordination prototype. This repository currently contains the application scaffold only; product workflows are tracked in `TASKS.md`.
+CareLoop is a synthetic screening-to-care coordination prototype. The current server includes authentication, role checks, and the health endpoint; workflow modules are tracked in `TASKS.md`.
 
 ## Requirements
 
 - Docker with the Compose plugin
-- Node.js 22 or later and npm 10 or later (for running workspace commands locally)
+- Node.js 22 or later and npm 10 or later for local workspace commands
 
-## Run the application with Docker
+## Run with Docker
 
 From the repository root:
 
-1. Copy the example environment file: `cp .env.example .env`
-2. Start all services: `docker compose up --build`
-3. Open the client at <http://localhost:3000>.
-4. Check the server at <http://localhost:4000/health>; it returns `{"status":"OK"}`.
-5. Stop the services with `Ctrl+C`; remove the containers with `docker compose down`.
+```sh
+cp .env.example .env
+docker compose up --build
+```
 
-The local database uses the placeholder credentials in `.env.example`. Replace them for any environment beyond local development. No real secrets are included.
+Open the client at <http://localhost:3000>. The server health check is <http://localhost:4000/health> and returns `{"status":"OK"}`. Stop the attached services with `Ctrl+C`.
 
-## Run workspace apps locally
+The values in `.env.example` are local placeholders, not production secrets. In particular, `JWT_SECRET` and `DEMO_PASSWORD` must be replaced outside a local demo. Do not reuse the demo password or check real secrets into the repository.
 
-1. Copy environment variables: `cp .env.example .env`.
-2. Install dependencies: `npm install`.
-3. Start the server: `npm run dev:server`.
-4. In another terminal, start the client: `npm run dev:client`.
+## Seed demo users
 
-The local server listens on port 4000 and the client on port 3000. A local PostgreSQL instance is not needed for the scaffold health route.
+In another terminal, run the idempotent seed command:
 
-## Run the core database tests
+```sh
+npm run seed
+```
 
-The test database stays inside the Compose network and does not need a published PostgreSQL port. Start the `db` service, then create the separate test database once:
+This applies any pending migrations and creates three providers, staff accounts, and two synthetic patients (English and Arabic). Local demo login: `admin@careloop.local` (or another seeded account) with the `DEMO_PASSWORD` from `.env`; the example value is `CareLoopDemo2026!`. This is demo-only and must be changed before any hosted deployment.
+
+## Auth curl examples
+
+The API is rooted at `http://localhost:4000/api/v1`. These examples use the example demo password. If you changed `DEMO_PASSWORD`, use that value instead.
+
+```sh
+# Wrong password: HTTP 401 with the same generic response used for an unknown email.
+curl -i http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@careloop.local","password":"wrong"}'
+
+# Login: saves the httpOnly, SameSite=Strict session cookie to a local cookie jar.
+curl -i -c cookies.txt http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@careloop.local","password":"CareLoopDemo2026!"}'
+
+# Read the authenticated session.
+curl -i -b cookies.txt http://localhost:4000/api/v1/auth/me
+
+# Logout clears the cookie.
+curl -i -b cookies.txt -c cookies.txt -X POST http://localhost:4000/api/v1/auth/logout
+
+# The cleared cookie no longer authenticates.
+curl -i -b cookies.txt http://localhost:4000/api/v1/auth/me
+rm cookies.txt
+```
+
+## Tests
+
+Run unit tests:
+
+```sh
+npm test
+```
+
+The database is reachable only inside the Compose network. Create `careloop_test` once in the existing database container, then run the database-backed core and auth tests. This command targets `careloop_test`; it does not use the demo database.
 
 ```sh
 docker compose up -d db
 docker compose exec -T db createdb -U careloop careloop_test
+npm run test:db
 ```
 
-Build the server image after source changes, then run the server workspace tests against that database. The bind mount makes the current host source and Prisma migrations available to the test container. `npm test` generates Prisma Client, applies pending migrations, and runs the core integration tests.
+If `careloop_test` already exists, skip the `createdb` command. The tests apply pending migrations and create only synthetic test records there. PostgreSQL has no published host port.
 
-```sh
-docker compose build server
-docker compose run --rm \
-  -v "$PWD/server:/app/server" \
-  -e 'DATABASE_URL=postgresql://careloop:careloop_local_only@db:5432/careloop_test?schema=public' \
-  server npm run test:db
-```
+## Run workspace apps locally
 
-Use the matching database credentials from `.env` if they differ from the local defaults. The tests only create synthetic records in `careloop_test`.
+Install dependencies with `npm install`, provide the environment values from `.env.example` in the shell, then run `npm run dev:server` and `npm run dev:client` in separate terminals. A local PostgreSQL service is required by the server.

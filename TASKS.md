@@ -44,10 +44,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 
 ## Phase 1 — Backend foundation (Days 3-5)
 
-### [ ] T-101 Auth and RBAC
+### [x] T-101 Auth and RBAC
 - Agent: Codex. Depends: T-002, T-003
 - Output: register/login/logout/me, bcrypt, JWT httpOnly cookie, `auth` and `role` middleware, seed of demo users (patient, 2 doctors in different providers, coordinator, admin).
 - Accept: tests prove each role is allowed/denied on a sample route; passwords never returned; invalid token rejected.
+- Evidence (2026-11-03): 48 unit tests and 18 Compose DB/auth tests passed; `npm run lint` and `npm run build` passed. Fresh `docker compose up --build -d` generated Prisma Client in the image; `/health`, wrong/right password login, cookie-backed `/auth/me`, logout, and post-logout 401 were verified. Seed and run commands are in README.
 
 ### [x] T-102 Clock, event log and audit core
 - Agent: Codex. Depends: T-002

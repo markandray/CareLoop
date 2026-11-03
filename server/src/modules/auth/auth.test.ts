@@ -1,6 +1,7 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { spawnSync } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -450,6 +451,19 @@ describe('T-101 Auth and RBAC test suite', () => {
       /at least 32 characters/,
       'Must refuse to start when JWT_SECRET is less than 32 characters',
     );
+
+    const startup = spawnSync(
+      process.execPath,
+      ['--import', 'tsx', 'src/server.ts'],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        timeout: 5_000,
+        env: { ...process.env, JWT_SECRET: '' },
+      },
+    );
+    assert.equal(startup.status, 1, 'server process must exit on invalid env');
+    assert.match(`${startup.stderr}${startup.stdout}`, /JWT_SECRET/);
   });
 
   test('11. passwordHash never appears in any response', async () => {
