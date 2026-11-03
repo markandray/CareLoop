@@ -366,6 +366,7 @@ model Referral {
   fromProviderId  String         @db.Uuid
   toProviderId    String         @db.Uuid
   status          ReferralStatus @default(PENDING)
+  reason          String?        @db.Text
   rejectionReason String?        @db.Text
   respondedAt     DateTime?      @db.Timestamptz(3)
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
@@ -387,6 +388,7 @@ model Appointment {
   referralId  String            @db.Uuid
   scheduledAt DateTime          @db.Timestamptz(3)
   status      AppointmentStatus @default(SCHEDULED)
+  location    String?           @db.Text
   delayReason DelayReason?
   createdAt   DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime          @updatedAt @db.Timestamptz(3)

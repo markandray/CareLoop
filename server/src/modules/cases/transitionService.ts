@@ -262,27 +262,7 @@ export async function executeTransition(
         (item) => item.toProviderId === actor.providerId && item.status !== ReferralStatus.SUPERSEDED,
       );
       if (!referral) throw AppError.notFound('Case not found.');
-      const evidenceRows = await tx.evidence.findMany({
-        where: { caseId },
-        select: { details: true },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      });
-      const matching = evidenceRows.map(({ details }) => jsonRecord(details));
-      const reasonRow = matching.find((details) => details.referralId === referral.id);
-      const reasonEvidence = reasonRow ? jsonRecord(reasonRow.evidence) : {};
-      const locations: Record<string, string> = {};
-      for (const details of matching) {
-        const evidenceData = jsonRecord(details.evidence);
-        if (typeof details.appointmentId === 'string' && typeof evidenceData.location === 'string') {
-          locations[details.appointmentId] = evidenceData.location;
-        }
-      }
-      projectedCase = projectReferralPacket(
-        updatedCase,
-        referral,
-        typeof reasonEvidence.referralReason === 'string' ? reasonEvidence.referralReason : '',
-        locations,
-      );
+      projectedCase = projectReferralPacket(updatedCase, referral);
       projectedEvent = { ...projectedEvent, payload: null };
     } else {
       projectedCase = projectCaseForActor(updatedCase, actor);
@@ -314,6 +294,7 @@ async function applyOwnedRows(
         caseId: caseRecord.id,
         fromProviderId: caseRecord.originProviderId,
         toProviderId,
+        reason: requiredString(evidence.referralReason),
         status: ReferralStatus.PENDING,
         createdAt: now,
         updatedAt: now,
@@ -344,6 +325,7 @@ async function applyOwnedRows(
         caseId: caseRecord.id,
         fromProviderId: currentReferral.fromProviderId,
         toProviderId,
+        reason: requiredString(evidence.referralReason),
         status: ReferralStatus.PENDING,
         createdAt: now,
         updatedAt: now,
@@ -379,6 +361,7 @@ async function applyOwnedRows(
         referralId: currentReferral.id,
         scheduledAt: new Date(requiredString(evidence.scheduledAt)),
         status: AppointmentStatus.SCHEDULED,
+        location: requiredString(evidence.location),
         delayReason: key === 'RESCHEDULE_APPOINTMENT' ? (delayReason ?? null) : null,
         createdAt: now,
         updatedAt: now,
@@ -484,11 +467,6 @@ function asEvidenceRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-}
-
-function jsonRecord(value: unknown): Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
-  return value as Record<string, unknown>;
 }
 
 function delayEntity(

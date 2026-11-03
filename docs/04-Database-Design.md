@@ -50,8 +50,8 @@ A case owner is one user **or** one role/provider queue. Both may be absent for 
 - **ScreeningCase** — one actionable screening result and its current state, clinical approval fields, owner, due date, acknowledgement timestamps, escalation level, escalation start time, and closure facts. While `NEW`, `reviewDraftSummary`, `reviewDraftNextStep`, and `reviewDraftUrgencyLabel` hold the clinician's pending review draft. `reviewRoute` stores the selected `CONFIRMATION` or `REFERRAL` route and remains available after review. `escalatedAt` is set while the case is above `LEVEL_0` and cleared at `LEVEL_0`; its PostgreSQL sequence generates public IDs such as `CL-1001` (starting at 1001).
 - **CaseEvent** — append-only lifecycle and in-state events, with optional state endpoints, actor type and user actor ID, timestamp, and structured payload. System events use `actorType = SYSTEM`; user events require a user actor ID.
 - **Evidence** — structured supporting records for transitions and closure decisions, attributed to the user who recorded them.
-- **Referral** — a provider-to-provider handoff with `respondedAt` recording when the receiving provider accepts or rejects it. Reassignment creates a new row; the former row can be retained as `SUPERSEDED` with any rejection reason intact.
-- **Appointment** — scheduled, attended, missed, or rescheduled appointment attached to a referral. It has a nullable `delayReason` for appointment-specific context.
+- **Referral** — a provider-to-provider handoff with nullable `reason` and `respondedAt` recording when the receiving provider accepts or rejects it. Reassignment creates a new row; the former row can be retained as `SUPERSEDED` with any rejection reason intact.
+- **Appointment** — scheduled, attended, missed, or rescheduled appointment attached to a referral. It stores nullable `location` and `delayReason` for appointment details and corrective-action context.
 - **ContactAttempt** — outreach channel and outcome tied to a case milestone and, when applicable, its referral or appointment. This makes failed attempts queryable for the current milestone.
 - **FollowUp** — an owned action and due date during care. Its status is `OPEN`, `COMPLETED`, or `CANCELLED`.
 - **Consult** — patient-to-clinician or clinician-to-clinician question, response, participants, and status.
@@ -64,6 +64,8 @@ A case owner is one user **or** one role/provider queue. Both may be absent for 
 `SystemSetting` is added by the seventh, additive migration. The clock stores its millisecond offset as a JSON number under the stable `demoClockOffsetMs` key; changing or resetting the demo clock updates this row through Prisma.
 
 The eighth additive migration adds the nullable review-draft fields and route to `ScreeningCase`. The route uses a checked `VARCHAR` rather than a Prisma enum so the agreed enums remain unchanged. The three draft values must be either all absent or all present; after `REVIEW_CASE`, the service copies them into approved case fields and clears the draft columns while retaining `reviewRoute`.
+
+The ninth additive migration adds nullable `Referral.reason` and `Appointment.location` text fields. Referral creation and appointment scheduling/rescheduling populate them from transition evidence; patient-facing appointment projections read `location` from the appointment row.
 
 ## Enum contract
 

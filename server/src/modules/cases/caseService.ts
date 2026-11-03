@@ -247,14 +247,7 @@ export async function getCase(
         (item) => item.toProviderId === actor.providerId && item.status !== 'SUPERSEDED',
       );
       if (!referral) throw AppError.notFound('Case not found.');
-      const evidence = await tx.evidence.findMany({
-        where: { caseId: row.id },
-        select: { details: true },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      });
-      const referralReason = evidenceString(evidence, 'referralId', referral.id, 'referralReason') ?? '';
-      const locations = appointmentLocations(evidence);
-      return projectReferralPacket(row, referral, referralReason, locations);
+      return projectReferralPacket(row, referral);
     }
     return projectCaseForActor(row, actor);
   });
@@ -454,39 +447,5 @@ function eventCursorWhere(
 function isReceivingProviderActor(actor: CaseActor, originProviderId: string): boolean {
   return (actor.role === 'DOCTOR' || actor.role === 'COORDINATOR') &&
     actor.providerId !== null && actor.providerId !== originProviderId;
-}
-
-function evidenceObject(value: Prisma.JsonValue): Record<string, unknown> | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function evidenceString(
-  evidence: Array<{ details: Prisma.JsonValue }>,
-  parentIdKey: string,
-  parentId: string,
-  field: string,
-): string | null {
-  for (const item of evidence) {
-    const details = evidenceObject(item.details);
-    if (details?.[parentIdKey] !== parentId) continue;
-    const nested = evidenceObject(details.evidence as Prisma.JsonValue);
-    if (typeof nested?.[field] === 'string') return nested[field];
-  }
-  return null;
-}
-
-function appointmentLocations(
-  evidence: Array<{ details: Prisma.JsonValue }>,
-): Record<string, string> {
-  const locations: Record<string, string> = {};
-  for (const item of evidence) {
-    const details = evidenceObject(item.details);
-    const nested = details ? evidenceObject(details.evidence as Prisma.JsonValue) : null;
-    if (typeof details?.appointmentId === 'string' && typeof nested?.location === 'string') {
-      locations[details.appointmentId] = nested.location;
-    }
-  }
-  return locations;
 }
 

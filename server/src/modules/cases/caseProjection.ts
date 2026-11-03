@@ -268,8 +268,6 @@ export function projectCaseListItem(row: CaseListProjectionRecord): CaseListItem
 export function projectReferralPacket(
   row: CaseProjectionRecord,
   referral: CaseProjectionRecord['referrals'][number],
-  referralReason: string,
-  appointmentLocations: Readonly<Record<string, string>> = {},
 ): ReferralPacket {
   const approved = row.explanations.filter(
     (explanation) => explanation.status === 'APPROVED',
@@ -285,17 +283,14 @@ export function projectReferralPacket(
     referralId: referral.id,
     caseId: row.id,
     patient: patientSummary(row),
-    referralReason,
+    referralReason: referral.reason ?? '',
     approvedExplanation: explanation,
     recommendedNextStep: row.recommendedNextStep,
     urgencyLabel: row.urgencyLabel,
     receivingProvider: providerSummary(referral.toProvider),
     status: referral.status,
     respondedAt: iso(referral.respondedAt),
-    appointments: referral.appointments.map((appointment) => ({
-      ...appointmentSummary(appointment),
-      location: appointmentLocations[appointment.id] ?? null,
-    })),
+    appointments: referral.appointments.map(appointmentSummary),
     updatedAt: referral.updatedAt.toISOString(),
   });
 }
@@ -388,6 +383,7 @@ function referralSummary(referral: CaseProjectionRecord['referrals'][number]) {
     id: referral.id,
     toProvider: providerSummary(referral.toProvider),
     status: referral.status,
+    reason: referral.reason,
     respondedAt: iso(referral.respondedAt),
     rejectionReason: referral.rejectionReason,
     createdAt: referral.createdAt.toISOString(),
@@ -402,6 +398,7 @@ function appointmentSummary(
     id: appointment.id,
     scheduledAt: appointment.scheduledAt.toISOString(),
     status: appointment.status,
+    location: appointment.location,
     delayReason: appointment.delayReason,
     updatedAt: appointment.updatedAt.toISOString(),
   };

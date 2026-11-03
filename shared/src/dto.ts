@@ -187,6 +187,7 @@ export const ReferralSummarySchema = StrictObject({
   id: UuidSchema,
   toProvider: ProviderSummarySchema,
   status: ReferralStatusSchema,
+  reason: z.string().nullable(),
   respondedAt: UtcTimestampSchema.nullable(),
   rejectionReason: z.string().nullable(),
   createdAt: UtcTimestampSchema,
@@ -199,7 +200,7 @@ export const AppointmentSummarySchema = StrictObject({
   scheduledAt: UtcTimestampSchema,
   status: AppointmentStatusSchema,
   delayReason: DelayReasonSchema.nullable(),
-  location: z.string().nullable().optional(),
+  location: z.string().nullable(),
   updatedAt: UtcTimestampSchema,
 });
 export type AppointmentSummary = z.infer<typeof AppointmentSummarySchema>;
@@ -361,6 +362,7 @@ export const ReferralDtoSchema = StrictObject({
   fromProviderId: UuidSchema,
   toProviderId: UuidSchema,
   status: ReferralStatusSchema,
+  reason: z.string().nullable(),
   rejectionReason: z.string().nullable(),
   respondedAt: UtcTimestampSchema.nullable(),
   createdAt: UtcTimestampSchema,
@@ -373,6 +375,7 @@ export const AppointmentDtoSchema = StrictObject({
   referralId: UuidSchema,
   scheduledAt: UtcTimestampSchema,
   status: AppointmentStatusSchema,
+  location: z.string().nullable(),
   delayReason: DelayReasonSchema.nullable(),
   createdAt: UtcTimestampSchema,
   updatedAt: UtcTimestampSchema,
