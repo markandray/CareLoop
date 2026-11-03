@@ -66,6 +66,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: create case (doctor/admin), list/get with role-scoped visibility, assignment, case id format `CL-####`.
 - Accept: patient sees only own cases; doctor sees own provider's/assigned cases; unauthorized access returns 403 and is tested; sensitive reads audited.
 
+#### [x] T-104a Case data layer
+- Agent: Codex. Depends: T-101, T-102, T-103
+- Output: case visibility scopes, zod-validated role projections, transaction-backed create/list/get/event data service, and Compose DB tests. No routes are included.
+- Evidence (2026-11-03): `npm run lint`, `npm run build`, `npm test` (108 tests), and `npm run test:db` (29 tests) pass. DB suite confirmed case visibility, redacted DTOs/events, atomic writes/rollback, stable keyset pagination, and read audits. Receiving-provider access remains for T-201; T-104 route integration and assignment action remain outstanding.
+
 ### [ ] T-105 Case transitions endpoint
 - Agent: Codex. Depends: T-103, T-104
 - Output: `POST /cases/:id/transitions` applying the state machine, setting owner and `dueAt` from SLA config, writing events.
