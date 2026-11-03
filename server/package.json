@@ -6,7 +6,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "npm run generate && tsc -p tsconfig.json",
     "generate": "prisma generate",
-    "test:db": "npm run generate && prisma migrate deploy && tsx --test src/core/*.test.ts src/modules/auth/*.test.ts tests/cases.db.ts",
+    "test:db": "npm run generate && prisma migrate deploy && tsx --test src/core/*.test.ts src/modules/auth/*.test.ts tests/cases.db.ts tests/cases.routes.db.ts",
     "seed": "npm run generate && prisma migrate deploy && tsx src/seed.ts",
     "start": "node dist/server.js"
   },

@@ -23,7 +23,6 @@ export function validateQuery<T extends z.ZodTypeAny>(schema: T) {
         result.error.errors[0]?.message ?? 'Invalid query parameters.';
       return next(AppError.validation(message, result.error.flatten()));
     }
-    req.query = result.data;
     next();
   };
 }
