@@ -6,17 +6,26 @@
     "dev": "tsx watch src/server.ts",
     "build": "npm run generate && tsc -p tsconfig.json",
     "generate": "prisma generate",
-    "test:db": "npm run generate && prisma migrate deploy && tsx --test src/core/*.test.ts",
+    "test:db": "npm run generate && prisma migrate deploy && tsx --test src/core/*.test.ts src/modules/auth/*.test.ts",
+    "seed": "npm run generate && prisma migrate deploy && tsx src/seed.ts",
     "start": "node dist/server.js"
   },
   "dependencies": {
     "@careloop/shared": "*",
     "@prisma/client": "^6.9.0",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.7.3",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
     "prisma": "^6.9.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
     "tsx": "^4.19.4"
   }
 }

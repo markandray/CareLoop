@@ -211,8 +211,9 @@ Simulation probabilities are documented assumptions and are not empirical outcom
 - Provider directory listing is available to any authenticated role; provider staff lookup is limited to DOCTOR, COORDINATOR, and ADMIN and returns only ID, name, and role.
 - For append-only list items without a row-level `updatedAt`, list envelope `updatedAt` is the snapshot time.
 - Session cookie uses `httpOnly`, `SameSite=Strict`, and `Secure` in production. Bodies are JSON only, state-changing calls verify `Origin`, and login is rate-limited.
+- Login rate limiting enforces 5 failed attempts per 15 minutes per email+IP, returning HTTP 429 `RATE_LIMITED`. Successful logins do not count against the threshold. The prototype uses an in-memory tracker, which is acceptable for single-instance prototype scope and documented as a limitation.
 
 ## Spec issues
 
 1. The product spec does not define a stable cursor encoding or whether clients may replay events. The API keeps cursors opaque and event replay internal.
-2. The product spec requires login rate limiting but does not define its threshold or lockout window; those values need configuration before implementation.
+2. The User schema has no deactivation flag (e.g. `isActive` or `deactivatedAt`). Active authentication relies on reloading the user record from PostgreSQL to immediately block deleted users, but explicit administrative deactivation is not represented in the schema without an additive migration.

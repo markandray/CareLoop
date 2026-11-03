@@ -41,7 +41,7 @@ export default [
     },
   },
   {
-    files: ['server/src/core/clock.ts'],
+    files: ['server/src/core/clock.ts', 'server/src/core/realTime.ts'],
     rules: {
       'no-restricted-syntax': 'off',
       'no-restricted-properties': 'off',

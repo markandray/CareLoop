@@ -23,6 +23,10 @@ services:
     environment:
       SERVER_PORT: 4000
       DATABASE_URL: postgresql://${POSTGRES_USER:-careloop}:${POSTGRES_PASSWORD:-careloop_local_only}@db:5432/${POSTGRES_DB:-careloop}?schema=public
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:-careloop_local_dev_secret_key_must_be_at_least_32_chars_long}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-CareLoopDemo2026!}
+      NODE_ENV: ${NODE_ENV:-development}
     ports:
       - '${SERVER_PORT:-4000}:4000'
     depends_on:
