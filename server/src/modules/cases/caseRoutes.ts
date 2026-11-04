@@ -14,6 +14,7 @@ import {
   ConfirmUnderstandingRequestSchema,
   ConsentRequestNotificationRequestSchema,
   GenerateExplanationsRequestSchema,
+  ApproveExplanationRequestSchema,
   ReviewDraftRequestSchema,
   type TransitionRequest,
 } from '@careloop/shared';
@@ -147,6 +148,47 @@ export function createCaseRouter(
     } catch (error) { next(error); }
   });
 
+  router.get('/:id/explanations', async (req, res, next) => {
+    try {
+      const now = clock.now();
+      const caseId = caseIdParam(req);
+      const result = await withTransaction(prisma, async (tx) => {
+        const row = await tx.screeningCase.findFirst({ where: { AND: [{ id: caseId }, caseVisibility(toCaseActor(req), now)] } });
+        if (!row) throw AppError.notFound('Case not found.');
+        const fields = draftFields(row);
+        const currentHash = fields ? hashExplanationInput(fields) : null;
+        const all = await tx.explanationDraft.findMany({ where: { caseId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+        const staffDoctor = req.user?.role === 'DOCTOR' && req.user.providerId === row.originProviderId;
+        const visible = staffDoctor ? all : all.filter((item) => item.status === 'APPROVED' && item.inputHash === currentHash);
+        await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'EXPLANATIONS_READ', entityType: 'ScreeningCase', entityId: caseId }, clock);
+        return visible.map((item) => explanationResponse(item, item.inputHash === currentHash, staffDoctor));
+      });
+      res.status(200).json({ items: result });
+    } catch (error) { next(error); }
+  });
+
+  router.post('/:id/explanations/:explanationId/approve', requireRole('DOCTOR'), validateBody(ApproveExplanationRequestSchema), async (req, res, next) => {
+    try {
+      const now = clock.now();
+      const caseId = caseIdParam(req);
+      const explanationId = Array.isArray(req.params.explanationId) ? req.params.explanationId[0] ?? '' : req.params.explanationId;
+      const dto = await withTransaction(prisma, async (tx) => {
+        const row = await tx.screeningCase.findFirst({ where: { AND: [{ id: caseId, originProviderId: req.user!.providerId ?? '00000000-0000-0000-0000-000000000000' }, caseVisibility(toCaseActor(req), now)] } });
+        if (!row) throw AppError.notFound('Case not found.');
+        const fields = draftFields(row);
+        const currentHash = fields ? hashExplanationInput(fields) : null;
+        const explanation = await tx.explanationDraft.findFirst({ where: { id: explanationId, caseId } });
+        if (!explanation) throw AppError.notFound('Explanation not found.');
+        if (explanation.status !== 'DRAFT' || explanation.inputHash !== currentHash) throw AppError.conflict('Only a current draft explanation can be approved.');
+        const updated = await tx.explanationDraft.update({ where: { id: explanation.id }, data: { status: 'APPROVED', approvedBy: req.user!.id, approvedAt: now, updatedAt: now } });
+        await appendEvent(tx, { caseId, type: CaseEventType.EXPLANATION_APPROVED, actorType: ActorType.USER, actorId: req.user!.id, payload: { explanationId: explanation.id, language: explanation.language, inputHash: explanation.inputHash } }, clock);
+        await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'EXPLANATION_APPROVED', entityType: 'ExplanationDraft', entityId: explanation.id }, clock);
+        return explanationResponse(updated, true, true);
+      });
+      res.status(200).json({ explanation: dto });
+    } catch (error) { next(error); }
+  });
+
   router.post('/:id/understanding', requireRole('PATIENT'), validateBody(ConfirmUnderstandingRequestSchema), async (req, res, next) => {
     try {
       const caseId = caseIdParam(req);
@@ -251,5 +293,40 @@ function toCaseActor(req: Request): CaseActor {
     userId: req.user.id,
     role: req.user.role,
     providerId: req.user.providerId,
+  };
+}
+
+function draftFields(row: { reviewDraftResultCategoryCode: string | null; reviewDraftNextStepCode: string | null; reviewDraftUrgencyLabel: 'ROUTINE' | 'URGENT' | null; reviewRoute: string | null; reviewDraftDoctorNote: string | null }) {
+  const result = ReviewDraftRequestSchema.safeParse({
+    resultCategoryCode: row.reviewDraftResultCategoryCode,
+    nextStepCode: row.reviewDraftNextStepCode,
+    urgencyLabel: row.reviewDraftUrgencyLabel,
+    route: row.reviewRoute,
+    ...(row.reviewDraftDoctorNote ? { doctorNote: row.reviewDraftDoctorNote } : {}),
+  });
+  return result.success ? result.data : null;
+}
+
+function explanationResponse(item: { id: string; language: 'EN' | 'AR' | 'OTHER'; text: string; source: 'TEMPLATE' | 'LLM'; status: 'DRAFT' | 'APPROVED'; approvedBy: string | null; approvedAt: Date | null; updatedAt: Date; inputHash: string }, current: boolean, doctor: boolean) {
+  let output: Record<string, unknown> = {};
+  try { output = JSON.parse(item.text) as Record<string, unknown>; } catch { output = { text: item.text }; }
+  const sections = typeof output.sections === 'object' && output.sections !== null ? output.sections as Record<string, unknown> : {};
+  const doctorNote = typeof sections.doctorNote === 'string' ? sections.doctorNote : null;
+  const safeSections = { ...sections };
+  delete safeSections.doctorNote;
+  return {
+    id: item.id,
+    language: item.language,
+    text: JSON.stringify({ ...output, sections: safeSections }),
+    source: item.source,
+    status: item.status,
+    approvedBy: item.approvedBy,
+    approvedAt: item.approvedAt?.toISOString() ?? null,
+    updatedAt: item.updatedAt.toISOString(),
+    inputHash: item.inputHash,
+    current,
+    reviewNotice: item.language === 'AR' ? 'UNREVIEWED_TRANSLATION' : 'NONE',
+    doctorNoteSection: doctor && doctorNote ? { label: 'Not translated' as const, text: doctorNote } : null,
+    ...(doctor ? { stale: !current } : {}),
   };
 }
