@@ -119,15 +119,25 @@ export function createNotificationRouter(
     try {
       const id = parseNotificationId(req.params.id);
       const result = await withTransaction(prisma, async (tx) => {
-        const notification = await tx.notification.findFirst({ where: { id, userId: req.user!.id }, select: { id: true, caseId: true, status: true } });
+        const notification = await tx.notification.findFirst({ where: { id, userId: req.user!.id }, select: { id: true, caseId: true, status: true, templateKey: true } });
         if (!notification) throw AppError.notFound('Notification not found.');
         if (notification.status !== NotificationStatus.SENT) throw AppError.conflict('Notification has not been sent.');
         await tx.$queryRaw`SELECT "id" FROM "ScreeningCase" WHERE "id" = ${notification.caseId} FOR UPDATE`;
         const caseRecord = await tx.screeningCase.findUniqueOrThrow({ where: { id: notification.caseId }, select: { patientId: true, acknowledgedAt: true, state: true, closureReason: true, patient: { select: { userId: true } } } });
         if (caseRecord.patient.userId !== req.user!.id) throw AppError.notFound('Notification not found.');
-        if (caseRecord.acknowledgedAt) throw AppError.conflict('Case notification has already been acknowledged.');
+        const priorAcknowledgement = await tx.caseEvent.findFirst({
+          where: {
+            caseId: notification.caseId,
+            type: CaseEventType.NOTIFICATION_ACKNOWLEDGED,
+            payload: { path: ['notificationId'], equals: id },
+          },
+          select: { id: true },
+        });
+        if (priorAcknowledgement) throw AppError.conflict('Notification has already been acknowledged.');
         const now = clock.now();
-        await tx.screeningCase.update({ where: { id: notification.caseId }, data: { acknowledgedAt: now } });
+        if (notification.templateKey === 'result_reviewed' && !caseRecord.acknowledgedAt) {
+          await tx.screeningCase.update({ where: { id: notification.caseId }, data: { acknowledgedAt: now } });
+        }
         const event = await appendEvent(tx, { caseId: notification.caseId, type: CaseEventType.NOTIFICATION_ACKNOWLEDGED, actorType: ActorType.USER, actorId: req.user!.id, payload: { notificationId: id } }, clock);
         await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'NOTIFICATION_ACKNOWLEDGED', entityType: 'Notification', entityId: id }, clock);
         const eventWithActor = await tx.caseEvent.findUniqueOrThrow({ where: { id: event.id }, include: { actor: true } });

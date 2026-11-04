@@ -186,7 +186,7 @@ Notification template keys:
 | `CLOSED` + `TRANSFERRED_OUT` | Transferred to external care | "Your care has been transferred to an external medical provider outside CareLoop." |
 
 **Patient Actions in Portal**:
-1. **Acknowledge Notification**: Records `acknowledgedAt` timestamp (`NOTIFICATION_ACKNOWLEDGED`).
+1. **Acknowledge Notification**: Every sent notification acknowledgement writes `NOTIFICATION_ACKNOWLEDGED` and an audit row. Only acknowledgement of the initial `result_reviewed` notification sets the case-level `acknowledgedAt`; acknowledgement of later automatic templates leaves that case field unchanged.
 2. **Confirm Understanding**: After reading the approved plain-language explanation, the patient may click "I understand" (`UNDERSTANDING_CONFIRMED`).
 3. **Decline Care**: Patient can indicate they choose not to proceed (`CARE_DECLINED_BY_PATIENT`), notifying the coordinator to follow up.
 4. **Grant / Revoke Consent**: Patient manages cross-provider data-sharing authorization.
@@ -230,7 +230,7 @@ Attention indicates operational drop-off risk, not clinical severity. Every atte
 | Attention rule | Base points | Trigger condition |
 |---|---:|---|
 | Unassigned case | 30 | Case is non-terminal with `ownerUserId = null` and `ownerRole = null`. |
-| Notification unacknowledged after window | 20 | `acknowledgedAt` is null and elapsed time since dispatch exceeds window (72h routine / 24h urgent). |
+| Initial notification unacknowledged after window | 20 | `result_reviewed` has been sent (`notifiedAt` is set), `acknowledgedAt` is null, and elapsed time since `notifiedAt` exceeds the window (72h routine / 24h urgent). Acknowledging another template does not satisfy this fact. |
 | Referral pending longer than SLA | 25 | In `REFERRAL_PENDING` and elapsed time exceeds referral acceptance SLA (3d routine / 24h urgent). |
 | Rejected referral not reassigned | 25 | Referral rejected by receiving provider and reassign window breached (24h routine / 4h urgent). |
 | Appointment overdue or missed | 25 | Appointment time passed without attendance logged, or appointment marked `MISSED`. |
@@ -423,7 +423,7 @@ All duration metrics report **median** and **90th percentile (P90)**. To prevent
 #### Duration metrics (completed stages only)
 - **Time to Review**: `reviewed_at - created_at` (measured across cases leaving `NEW`).
 - **Time to Notification**: `first_notification_sent - reviewed_at` (measured across cases leaving `CLINICIAN_REVIEWED`).
-- **Time to Acknowledgement**: `acknowledgedAt - first_notification_sent` (for cases where notification was sent).
+- **Time to Acknowledgement**: `acknowledgedAt - notifiedAt` (for cases where the initial `result_reviewed` notification was sent and acknowledged).
 - **Time to Confirmation**: `confirmation_recorded_at - entered_confirmation_pending_at`.
 - **Time to Referral Acceptance**: `referral_accepted_at - referral_created_at`.
 - **Time to Appointment Attendance**: `appointment_attended_at - referral_accepted_at`.
