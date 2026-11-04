@@ -403,6 +403,8 @@ export const NotificationDtoSchema = StrictObject({
   channel: ContactChannelSchema,
   language: LanguageSchema,
   templateKey: NotificationTemplateKeySchema,
+  text: z.string(),
+  clinicallyReviewed: z.boolean(),
   status: NotificationStatusSchema,
   createdAt: UtcTimestampSchema,
   sentAt: UtcTimestampSchema.nullable(),
@@ -524,6 +526,13 @@ export const ConfirmUnderstandingRequestSchema = StrictObject({
 });
 export type ConfirmUnderstandingRequest = z.infer<
   typeof ConfirmUnderstandingRequestSchema
+>;
+
+export const ConsentRequestNotificationRequestSchema = StrictObject({
+  providerId: UuidSchema,
+});
+export type ConsentRequestNotificationRequest = z.infer<
+  typeof ConsentRequestNotificationRequestSchema
 >;
 
 export const ConfirmatoryResultRequestSchema = StrictObject({
