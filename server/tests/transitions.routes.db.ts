@@ -480,6 +480,7 @@ describe('T-105b transition HTTP routes', () => {
     assert.equal((await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'NO_ANSWER' })).status, 201);
     const after = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
     assert.equal(after.escalationLevel, 'LEVEL_2');
+    assert.ok(await prisma.auditLog.findFirst({ where: { action: 'ESCALATION_RAISED', entityType: 'ScreeningCase', entityId: item.id } }));
   });
 
   test('T-202a failed counts are isolated when the case advances to a different milestone', async () => {

@@ -59,7 +59,10 @@ export function createContactAttemptRouter(
           const retryNotification = await queueNotification(tx, clock, { caseId: caseRecord.id, templateKey: 'unreachable_retry', actor: { actorType: ActorType.USER, actorId: req.user!.id } });
           await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'UNREACHABLE_RETRY_SENT', entityType: 'Notification', entityId: retryNotification.id }, clock);
           const failedCount = await tx.contactAttempt.count({ where: { caseId: caseRecord.id, milestoneState: caseRecord.state, referralId: currentAppointment ? null : currentReferral?.id ?? null, appointmentId: currentAppointment?.id ?? null, outcome: { in: ['FAILED', 'NO_ANSWER'] } } });
-          if (failedCount === workflowConfig.thresholds.failedContactAttempts) await raiseEscalation(tx, { caseId: caseRecord.id, level: 'LEVEL_2', reason: 'Three failed contact attempts for the current workflow milestone.', now }, clock);
+          if (failedCount === workflowConfig.thresholds.failedContactAttempts) {
+            const raised = await raiseEscalation(tx, { caseId: caseRecord.id, level: 'LEVEL_2', reason: 'Three failed contact attempts for the current workflow milestone.', now }, clock);
+            if (raised) await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'ESCALATION_RAISED', entityType: 'ScreeningCase', entityId: caseRecord.id }, clock);
+          }
         }
         await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'CONTACT_ATTEMPT_LOGGED', entityType: 'ContactAttempt', entityId: attempt.id }, clock);
         return contactAttemptDto(attempt);
