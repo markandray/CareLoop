@@ -13,6 +13,7 @@ import {
   TransitionRequestSchema,
   ConfirmUnderstandingRequestSchema,
   ConsentRequestNotificationRequestSchema,
+  GenerateExplanationsRequestSchema,
   ReviewDraftRequestSchema,
   type TransitionRequest,
 } from '@careloop/shared';
@@ -32,6 +33,8 @@ import { toNotificationDto } from '../notifications/notificationRoutes';
 import { hashExplanationInput } from '../explanation/provider';
 import { CaseState } from '@prisma/client';
 import { caseVisibility } from './caseVisibility';
+import { TemplateExplanationProvider } from '../explanation/provider';
+import { generateValidatedExplanation } from '../explanation/validator';
 
 export function createCaseRouter(
   prisma: PrismaClient,
@@ -108,6 +111,39 @@ export function createCaseRouter(
         return { ...fields, inputHash: hashExplanationInput(fields), updatedAt: now.toISOString() };
       });
       res.status(200).json({ reviewDraft: result });
+    } catch (error) { next(error); }
+  });
+
+  router.post('/:id/explanations/generate', requireRole('DOCTOR'), validateBody(GenerateExplanationsRequestSchema), async (req, res, next) => {
+    try {
+      const now = clock.now();
+      const caseId = caseIdParam(req);
+      const result = await withTransaction(prisma, async (tx) => {
+        const row = await tx.screeningCase.findFirst({ where: { AND: [{ id: caseId, originProviderId: req.user!.providerId ?? '00000000-0000-0000-0000-000000000000' }, caseVisibility(toCaseActor(req), now)] } });
+        if (!row) throw AppError.notFound('Case not found.');
+        const fields = ReviewDraftRequestSchema.safeParse({
+          resultCategoryCode: row.reviewDraftResultCategoryCode,
+          nextStepCode: row.reviewDraftNextStepCode,
+          urgencyLabel: row.reviewDraftUrgencyLabel,
+          route: row.reviewRoute,
+          ...(row.reviewDraftDoctorNote ? { doctorNote: row.reviewDraftDoctorNote } : {}),
+        });
+        if (!fields.success) throw new AppError(422, 'EVIDENCE_MISSING', 'A complete review draft is required.');
+        const inputHash = hashExplanationInput(fields.data);
+        const existing = await tx.explanationDraft.findMany({ where: { caseId, inputHash, language: { in: ['EN', 'AR'] } }, orderBy: { createdAt: 'asc' } });
+        const currentLanguages = new Set(existing.map((item) => item.language));
+        if (!currentLanguages.has('EN') || !currentLanguages.has('AR')) {
+          const provider = new TemplateExplanationProvider();
+          const outputs = (['EN', 'AR'] as const).map((language) => generateValidatedExplanation(provider, fields.data, language).output);
+          await tx.explanationDraft.createMany({ data: outputs.filter((output) => !currentLanguages.has(output.language)).map((output) => ({
+            caseId, language: output.language, source: 'TEMPLATE', status: 'DRAFT', inputHash, text: JSON.stringify(output), createdAt: now, updatedAt: now,
+          })) });
+          await appendEvent(tx, { caseId, type: CaseEventType.EXPLANATION_GENERATED, actorType: ActorType.USER, actorId: req.user!.id, payload: { inputHash, languages: ['EN', 'AR'] } }, clock);
+          await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'EXPLANATION_GENERATED', entityType: 'ScreeningCase', entityId: caseId }, clock);
+        }
+        return tx.explanationDraft.findMany({ where: { caseId, inputHash, language: { in: ['EN', 'AR'] } }, orderBy: { language: 'asc' } });
+      });
+      res.status(200).json({ explanations: result.map((item) => ({ id: item.id, language: item.language, text: item.text, source: item.source, status: item.status, approvedBy: item.approvedBy, approvedAt: item.approvedAt?.toISOString() ?? null, updatedAt: item.updatedAt.toISOString(), inputHash: item.inputHash, current: true, reviewNotice: item.language === 'AR' ? 'UNREVIEWED_TRANSLATION' : 'NONE', doctorNoteSection: null })) });
     } catch (error) { next(error); }
   });
 
