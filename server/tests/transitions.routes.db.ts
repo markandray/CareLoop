@@ -364,6 +364,33 @@ describe('T-105b transition HTTP routes', () => {
     assert.deepEqual(referrals.map((row) => row.status).sort(), ['PENDING', 'SUPERSEDED']);
   });
 
+  test('T-202a receiving coordinator rejection records response and returns ownership to the origin queue', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING', reason: 'Synthetic referral.' } });
+    const response = await api('COORDINATOR_RECEIVING', 'POST', `/referrals/${referral.id}/reject`, { rejectionReason: 'No capacity' });
+    assert.equal(response.status, 200);
+    const updated = await prisma.referral.findUniqueOrThrow({ where: { id: referral.id } });
+    const currentCase = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+    assert.equal(updated.status, 'REJECTED');
+    assert.equal(updated.respondedAt?.toISOString(), now.toISOString());
+    assert.equal(currentCase.state, 'REFERRAL_PENDING');
+    assert.equal(currentCase.ownerQueueRole, 'COORDINATOR');
+    assert.equal(currentCase.ownerQueueProviderId, originId);
+    assert.equal(currentCase.dueAt?.toISOString(), new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString());
+  });
+
+  test('T-202a referral rejection is forbidden to the origin coordinator', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING' } });
+    assert.equal((await api('COORDINATOR_ORIGIN', 'POST', `/referrals/${referral.id}/reject`, { rejectionReason: 'No capacity' })).status, 403);
+  });
+
+  test('T-202a rejected referral cannot be rejected twice', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'REJECTED', rejectionReason: 'No capacity', respondedAt: now } });
+    assert.equal((await api('COORDINATOR_RECEIVING', 'POST', `/referrals/${referral.id}/reject`, { rejectionReason: 'Again' })).status, 409);
+  });
+
   test('route returns every transition error status and code', async () => {
     const unauthenticatedCase = await makeCase('NEW');
     const noAuth = await transition(undefined, unauthenticatedCase.id, validReviewBody());

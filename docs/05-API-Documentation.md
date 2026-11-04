@@ -113,7 +113,7 @@ Every transition request includes `expectedState`; a mismatch returns `409 CONFL
 | ---------------------------- | --------------------------------------------- | ------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------- |
 | `GET /cases/:id/referrals`   | PATIENT own, DOCTOR/COORDINATOR scoped, ADMIN | cursor query              | cursor page of `ReferralDto` | `NOT_FOUND`, `FORBIDDEN`, `CONSENT_REQUIRED`; audit sensitive read                          |
 | `GET /referrals/:id/packet`  | DOCTOR/COORDINATOR of receiving provider      | None                      | `ReferralPacket`             | `NOT_FOUND`, `FORBIDDEN`, `CONSENT_REQUIRED`; audit sensitive read                          |
-| `POST /referrals/:id/reject` | DOCTOR/COORDINATOR of receiving provider      | `{rejectionReason,note?}` | `{referral,event}`           | `NOT_FOUND`, `FORBIDDEN`, `CONFLICT`; sets REJECTED/respondedAt, `REFERRAL_REJECTED`, audit |
+| `POST /referrals/:id/reject` | DOCTOR/COORDINATOR of receiving provider      | `{rejectionReason,note?}` | `{referral,event}`           | `NOT_FOUND`, `FORBIDDEN`, `CONSENT_REQUIRED`, `CONFLICT`; sets REJECTED/respondedAt, `REFERRAL_REJECTED`, audit; case remains REFERRAL_PENDING and returns to origin COORDINATOR queue with the configured rejected-referral window |
 
 Accept and reassign use the lifecycle transition endpoint and `ACCEPT_REFERRAL` / `REASSIGN_REFERRAL` keys. All non-listed roles receive 403. Reassignment on an overdue case requires `delayReason`.
 

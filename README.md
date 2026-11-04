@@ -296,3 +296,16 @@ curl -i -b patient-cookies.txt "http://localhost:4000/api/v1/cases/$CASE_ID/expl
 curl -i -b patient-cookies.txt -X POST "http://localhost:4000/api/v1/cases/$CASE_ID/understanding" \
   -H 'Content-Type: application/json' -d "{\"explanationId\":\"$EN_EXPLANATION_ID\"}"
 ```
+
+Receiving-provider staff can reject a pending referral with a reason. The case remains in
+`REFERRAL_PENDING`; ownership and its 24 h routine / 4 h urgent reassignment deadline return to
+the origin coordinator queue. Referral and appointment history use cursor pagination.
+
+```sh
+REFERRAL_ID='replace-with-pending-referral-id'
+curl -i -b coordinator-receiving-cookies.txt "http://localhost:4000/api/v1/cases/$CASE_ID/referrals?limit=25"
+curl -i -b coordinator-receiving-cookies.txt -X POST "http://localhost:4000/api/v1/referrals/$REFERRAL_ID/reject" \
+  -H 'Content-Type: application/json' \
+  -d '{"rejectionReason":"No capacity at this provider"}'
+curl -i -b coordinator-receiving-cookies.txt "http://localhost:4000/api/v1/referrals/$REFERRAL_ID/appointments?limit=25"
+```

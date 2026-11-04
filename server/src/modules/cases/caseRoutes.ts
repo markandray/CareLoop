@@ -16,6 +16,8 @@ import {
   GenerateExplanationsRequestSchema,
   ApproveExplanationRequestSchema,
   ReviewDraftRequestSchema,
+  ReferralDtoSchema,
+  makeCursorPageSchema,
   type TransitionRequest,
 } from '@careloop/shared';
 import type { Clock } from '../../core/clock';
@@ -272,6 +274,25 @@ export function createCaseRouter(
     },
   );
 
+  router.get('/:id/referrals', validateQuery(CursorQuerySchema), async (req, res, next) => {
+    try {
+      const query = CursorQuerySchema.parse(req.query);
+      const cursor = query.cursor ? decodeReferralCursor(query.cursor) : undefined;
+      const page = await withTransaction(prisma, async (tx) => {
+        const visibleCase = await tx.screeningCase.findFirst({ where: { AND: [{ id: caseIdParam(req) }, caseVisibility(toCaseActor(req), clock.now())] }, select: { id: true } });
+        if (!visibleCase) throw AppError.notFound('Case not found.');
+        const rows = await tx.referral.findMany({ where: { caseId: visibleCase.id, ...(cursor ? { OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit + 1 });
+        await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'REFERRAL_LIST_READ', entityType: 'ScreeningCase', entityId: visibleCase.id }, clock);
+        return rows;
+      });
+      const hasMore = page.length > query.limit;
+      const rows = hasMore ? page.slice(0, query.limit) : page;
+      const items = rows.map((row) => ReferralDtoSchema.parse({ ...row, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), respondedAt: row.respondedAt?.toISOString() ?? null }));
+      const last = rows[rows.length - 1];
+      res.status(200).json(makeCursorPageSchema(ReferralDtoSchema).parse({ items, nextCursor: hasMore && last ? encodeReferralCursor(last.createdAt, last.id) : null, updatedAt: clock.now().toISOString() }));
+    } catch (error) { next(error); }
+  });
+
   router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await getCase(
@@ -286,6 +307,19 @@ export function createCaseRouter(
   });
 
   return router;
+}
+
+function decodeReferralCursor(cursor: string): { createdAt: Date; id: string } {
+  try {
+    const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as { createdAt: string; id: string };
+    const createdAt = new Date(value.createdAt);
+    if (!value.id || Number.isNaN(createdAt.getTime())) throw new Error('invalid');
+    return { createdAt, id: value.id };
+  } catch { throw AppError.validation('Invalid pagination cursor.'); }
+}
+
+function encodeReferralCursor(createdAt: Date, id: string): string {
+  return Buffer.from(JSON.stringify({ createdAt: createdAt.toISOString(), id })).toString('base64url');
 }
 
 function caseIdParam(req: Request): string {
