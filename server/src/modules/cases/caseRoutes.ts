@@ -123,6 +123,9 @@ export function createCaseRouter(
       const now = clock.now();
       const caseId = caseIdParam(req);
       const result = await withTransaction(prisma, async (tx) => {
+        // Serialize generation per case so concurrent requests cannot both observe
+        // a missing language draft and create duplicate bilingual sets.
+        await tx.$queryRaw`SELECT "id" FROM "ScreeningCase" WHERE "id" = ${caseId} FOR UPDATE`;
         const row = await tx.screeningCase.findFirst({ where: { AND: [{ id: caseId, originProviderId: req.user!.providerId ?? '00000000-0000-0000-0000-000000000000' }, caseVisibility(toCaseActor(req), now)] } });
         if (!row) throw AppError.notFound('Case not found.');
         const fields = ReviewDraftRequestSchema.safeParse({

@@ -152,6 +152,18 @@ describe('T-105b transition HTTP routes', () => {
     await assertError(await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/generate`, {}), 422, 'EVIDENCE_MISSING');
   });
 
+  test('T-202a concurrent identical explanation generation leaves exactly one EN and one AR draft', async () => {
+    const caseId = await newCaseWithDraft();
+    const responses = await Promise.all([
+      api('DOCTOR', 'POST', `/cases/${caseId}/explanations/generate`, {}),
+      api('DOCTOR', 'POST', `/cases/${caseId}/explanations/generate`, {}),
+    ]);
+    assert.ok(responses.every((response) => response.status === 200));
+    const rows = await prisma.explanationDraft.findMany({ where: { caseId } });
+    assert.equal(rows.filter((row) => row.language === 'EN').length, 1);
+    assert.equal(rows.filter((row) => row.language === 'AR').length, 1);
+  });
+
   test('T-401b patients and coordinators receive 403 for draft, generate, and approve actions', async () => {
     const caseId = await newCaseWithDraft();
     const ids = await draftIds(caseId);
