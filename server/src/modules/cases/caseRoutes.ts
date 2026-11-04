@@ -98,9 +98,12 @@ export function createCaseRouter(
         await tx.screeningCase.update({ where: { id: caseId }, data: { understandingConfirmedAt: now } });
         const event = await appendEvent(tx, { caseId, type: CaseEventType.UNDERSTANDING_CONFIRMED, actorType: ActorType.USER, actorId: req.user!.id, payload: { explanationId: explanation.id } }, clock);
         await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'UNDERSTANDING_CONFIRMED', entityType: 'ScreeningCase', entityId: caseId }, clock);
-        return { case: { id: caseRecord.id, state: caseRecord.state, understandingConfirmedAt: now.toISOString() }, event: { id: event.id, type: event.type, createdAt: event.createdAt.toISOString() } };
+        return { eventId: event.id };
       });
-      res.status(200).json(result);
+      const patientCase = await getCase({ prisma, clock }, toCaseActor(req), caseId);
+      const event = 'events' in patientCase ? patientCase.events.find((item) => item.id === result.eventId) : undefined;
+      if (!event) throw AppError.internal('Understanding event projection was not available.');
+      res.status(200).json({ case: patientCase, event });
     } catch (error) { next(error); }
   });
 

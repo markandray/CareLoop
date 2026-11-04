@@ -9,6 +9,7 @@ import {
 import {
   AcknowledgeNotificationRequestSchema,
   CursorQuerySchema,
+  DispatchNotificationRequestSchema,
   makeCursorPageSchema,
   NotificationDtoSchema,
   NotificationTemplateKeySchema,
@@ -20,6 +21,7 @@ import { appendEvent } from '../../core/eventLog';
 import { withTransaction } from '../../core/withTransaction';
 import { AppError } from '../../middleware/error/errorHandler';
 import { requireRole } from '../../middleware/role/roleMiddleware';
+import { validateBody } from '../../middleware/validate/validateRequest';
 import { caseVisibility } from '../cases/caseVisibility';
 import { getNotificationTemplate } from './templateCatalog';
 import { sendNotification } from './notificationService';
@@ -65,7 +67,7 @@ export function createNotificationRouter(
     } catch (error) { next(error); }
   });
 
-  router.post('/:id/dispatch', requireRole('COORDINATOR'), async (req, res, next) => {
+  router.post('/:id/dispatch', requireRole('COORDINATOR'), validateBody(DispatchNotificationRequestSchema), async (req, res, next) => {
     try {
       const id = parseNotificationId(req.params.id);
       const result = await withTransaction(prisma, async (tx) => {
@@ -116,7 +118,12 @@ export function createNotificationRouter(
 
 export function toNotificationDto(row: { id: string; caseId: string; channel: 'PHONE' | 'SMS' | 'EMAIL' | 'PORTAL'; language: 'EN' | 'AR' | 'OTHER'; templateKey: (typeof NotificationTemplateKeySchema.options)[number]; status: 'QUEUED' | 'SENT'; createdAt: Date; sentAt: Date | null }) {
   const template = getNotificationTemplate(row.templateKey, row.language);
-  return NotificationDtoSchema.parse({ ...row, createdAt: row.createdAt.toISOString(), sentAt: row.sentAt?.toISOString() ?? null, text: template.text, clinicallyReviewed: template.clinicallyReviewed });
+  return NotificationDtoSchema.parse({
+    id: row.id, caseId: row.caseId, channel: row.channel, language: row.language,
+    templateKey: row.templateKey, status: row.status, createdAt: row.createdAt.toISOString(),
+    sentAt: row.sentAt?.toISOString() ?? null, text: template.text,
+    clinicallyReviewed: template.clinicallyReviewed,
+  });
 }
 
 function parseNotificationId(value: string | string[]): string {

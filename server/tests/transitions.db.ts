@@ -156,7 +156,7 @@ test('full referral-to-care path persists state, owner, dueAt, events, and recei
   assert.ok(await prisma.evidence.findFirst({ where: { caseId: item.id, kind: 'CLINICIAN_SIGN_OFF', recordedBy: doctorReceiving } }));
 
   const lifecycle = await prisma.caseEvent.findMany({ where: { caseId: item.id } });
-  assert.equal(lifecycle.length, 7); // Includes the pre-seeded result_reviewed dispatch fact.
+  assert.equal(lifecycle.length, 12); // Includes the pre-seeded review dispatch and five automatic send events.
   for (const eventType of [
     CaseEventType.CASE_REVIEWED,
     CaseEventType.REFERRAL_CREATED,
@@ -458,7 +458,10 @@ test('every transition key persists the evaluator outcome and exactly its owned 
       const newEvents = (await prisma.caseEvent.findMany({ where: { caseId: fixture.caseId } }))
         .filter((event) => !beforeEventIds.has(event.id));
       assert.equal(newEvents.filter((event) => event.type === expected.eventType).length, 1);
-      assert.equal(newEvents.length, 1 + (key === 'RESCHEDULE_APPOINTMENT' ? 1 : 0));
+      assert.equal(newEvents.length,
+        1 +
+        (key === 'RESCHEDULE_APPOINTMENT' ? 1 : 0) +
+        (expected.notificationTemplate && expected.notificationTemplate !== 'result_reviewed' ? 1 : 0));
 
       const newEvidence = (await prisma.evidence.findMany({ where: { caseId: fixture.caseId } }))
         .filter((evidence) => !beforeEvidenceIds.has(evidence.id));
@@ -485,7 +488,10 @@ test('every transition key persists the evaluator outcome and exactly its owned 
       }), 1);
 
       const afterCounts = await counts(fixture.caseId);
-      assert.equal(afterCounts.events - beforeCounts.events, 1 + (key === 'RESCHEDULE_APPOINTMENT' ? 1 : 0));
+      assert.equal(afterCounts.events - beforeCounts.events,
+        1 +
+        (key === 'RESCHEDULE_APPOINTMENT' ? 1 : 0) +
+        (expected.notificationTemplate && expected.notificationTemplate !== 'result_reviewed' ? 1 : 0));
       assert.equal(afterCounts.evidence - beforeCounts.evidence, expectedKinds.length);
       assert.equal(afterCounts.notifications - beforeCounts.notifications, expected.notificationTemplate ? 1 : 0);
       assert.equal(afterCounts.audits - beforeCounts.audits, 1);
