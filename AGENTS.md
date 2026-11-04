@@ -333,6 +333,7 @@ docs/
 | 47 | `POST /cases/:id/transitions` permits authenticated DOCTOR and COORDINATOR roles at the route boundary; the state machine applies finer permissions and response projection | Separates route-level access from per-transition authorization while keeping patient/admin denial and receiving-provider packet redaction consistent |
 | 48 | Consent grants are append-only; revocation timestamps the grant and immediately removes receiving-provider access, while affected active referrals receive a LEVEL_1 escalation unless already at a higher level | Preserves an auditable permission history and gives active care coordination a human-owned next step after sharing is withdrawn |
 | 49 | Case-level `acknowledgedAt` records acknowledgement of the initial `result_reviewed` notification only; acknowledgements of other notifications remain per-notification event and audit records | Keeps the patient acknowledgement attention rule tied to the notification that conveys the reviewed result while preserving an audit trail for all notification interactions |
+| 50 | No clinician has reviewed any patient-facing wording; the `clinicallyReviewed` boolean was removed to avoid overclaiming. Notification texts are deliberately generic for privacy; the portal shows the specific status. | Makes the review limitation explicit and keeps notification wording generic while status context remains in the portal |
 
 ## 16. Resolved decisions
 
