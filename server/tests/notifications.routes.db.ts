@@ -154,6 +154,10 @@ test('patient acknowledgement sets acknowledgedAt once and preserves workflow st
   const notification = await makeNotification(item.id, patientUserId(patientOne), 'referral_started', 'SENT');
   const response = await request('PATIENT', 'POST', `/notifications/${notification.id}/acknowledge`, {});
   assert.equal(response.status, 200);
+  const responseBody = await response.json() as { event: { id: string; label: string; timestamp: string; patientStatus: string; type?: string } };
+  assert.equal(responseBody.event.label, 'Care update viewed');
+  assert.equal(responseBody.event.timestamp, now.toISOString());
+  assert.equal('type' in responseBody.event, false);
   const after = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
   assert.equal(after.acknowledgedAt?.toISOString(), now.toISOString());
   assert.equal(after.state, 'CLINICIAN_REVIEWED');

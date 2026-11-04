@@ -113,7 +113,7 @@
 - `dispatching a notification twice returns 409 CONFLICT` proves duplicate dispatch rejection.
 - `only the case origin coordinator may dispatch its result_reviewed notification` proves dispatch provider scoping.
 - `patient role receives 403 when dispatching a notification` proves patient dispatch denial.
-- `patient acknowledgement sets acknowledgedAt once and preserves workflow state` proves acknowledgement timestamp and state invariance.
+- `patient acknowledgement sets acknowledgedAt once and preserves workflow state` proves acknowledgement timestamp, patient-safe event projection, and state invariance.
 - `doctor role receives 403 when acknowledging a notification` proves staff acknowledgement denial.
 - `repeated patient acknowledgement returns 409 CONFLICT` proves duplicate acknowledgement rejection.
 - `patient cannot see another patient notification in their notification list` proves patient list isolation.

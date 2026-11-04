@@ -23,6 +23,7 @@ import { AppError } from '../../middleware/error/errorHandler';
 import { requireRole } from '../../middleware/role/roleMiddleware';
 import { validateBody } from '../../middleware/validate/validateRequest';
 import { caseVisibility } from '../cases/caseVisibility';
+import { projectPatientCaseEvent } from '../cases/caseProjection';
 import { getNotificationTemplate } from './templateCatalog';
 import { sendNotification } from './notificationService';
 
@@ -122,14 +123,18 @@ export function createNotificationRouter(
         if (!notification) throw AppError.notFound('Notification not found.');
         if (notification.status !== NotificationStatus.SENT) throw AppError.conflict('Notification has not been sent.');
         await tx.$queryRaw`SELECT "id" FROM "ScreeningCase" WHERE "id" = ${notification.caseId} FOR UPDATE`;
-        const caseRecord = await tx.screeningCase.findUniqueOrThrow({ where: { id: notification.caseId }, select: { patientId: true, acknowledgedAt: true, patient: { select: { userId: true } } } });
+        const caseRecord = await tx.screeningCase.findUniqueOrThrow({ where: { id: notification.caseId }, select: { patientId: true, acknowledgedAt: true, state: true, closureReason: true, patient: { select: { userId: true } } } });
         if (caseRecord.patient.userId !== req.user!.id) throw AppError.notFound('Notification not found.');
         if (caseRecord.acknowledgedAt) throw AppError.conflict('Case notification has already been acknowledged.');
         const now = clock.now();
         await tx.screeningCase.update({ where: { id: notification.caseId }, data: { acknowledgedAt: now } });
         const event = await appendEvent(tx, { caseId: notification.caseId, type: CaseEventType.NOTIFICATION_ACKNOWLEDGED, actorType: ActorType.USER, actorId: req.user!.id, payload: { notificationId: id } }, clock);
         await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'NOTIFICATION_ACKNOWLEDGED', entityType: 'Notification', entityId: id }, clock);
-        return { acknowledgedAt: now.toISOString(), event: { id: event.id, type: event.type, createdAt: event.createdAt.toISOString() } };
+        const eventWithActor = await tx.caseEvent.findUniqueOrThrow({ where: { id: event.id }, include: { actor: true } });
+        return {
+          acknowledgedAt: now.toISOString(),
+          event: projectPatientCaseEvent(eventWithActor, caseRecord.state, caseRecord.closureReason),
+        };
       });
       res.status(200).json(result);
     } catch (error) { next(error); }
