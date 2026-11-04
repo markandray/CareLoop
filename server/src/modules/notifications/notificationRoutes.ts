@@ -67,6 +67,27 @@ export function createNotificationRouter(
     } catch (error) { next(error); }
   });
 
+  router.get('/:id', async (req, res, next) => {
+    try {
+      const id = parseNotificationId(req.params.id);
+      const actor = req.user!;
+      const notification = await withTransaction(prisma, async (tx) => {
+        const row = await tx.notification.findFirst({
+          where: {
+            id,
+            screeningCase: { is: caseVisibility({ userId: actor.id, role: actor.role, providerId: actor.providerId }, clock.now()) },
+            ...(actor.role === 'PATIENT' ? { userId: actor.id } : {}),
+          },
+          select: { id: true, caseId: true, channel: true, language: true, templateKey: true, status: true, createdAt: true, sentAt: true },
+        });
+        if (!row) throw AppError.notFound('Notification not found.');
+        await record(tx, { actorType: ActorType.USER, actorId: actor.id, action: 'NOTIFICATION_READ', entityType: 'Notification', entityId: id }, clock);
+        return row;
+      });
+      res.status(200).json(toNotificationDto(notification));
+    } catch (error) { next(error); }
+  });
+
   router.post('/:id/dispatch', requireRole('COORDINATOR'), validateBody(DispatchNotificationRequestSchema), async (req, res, next) => {
     try {
       const id = parseNotificationId(req.params.id);

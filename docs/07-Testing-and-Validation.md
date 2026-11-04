@@ -105,15 +105,19 @@
 - `every notification template is neutral in EN and AR with no clinical terms or digits` proves all 13 catalog entries pass the denylist and digit scan.
 - `an automatic NOTIFICATION_SENT event does not satisfy result_reviewed dispatch evidence` proves the evaluator requires the exact review template key.
 - `patient lists own localized notifications with catalog text` proves patient notification listing and localized DTO text.
+- `Arabic notification DTO marks its template as not clinically reviewed` proves the Arabic review flag is false.
 - `coordinator notification list is limited to cases at their provider` proves staff notification scope.
 - `admin can list notifications across providers` proves admin notification visibility.
 - `origin coordinator dispatches result_reviewed and writes sent event, timestamp, and audit` proves dispatch authorization and atomic send records.
 - `dispatch requires an approved explanation and returns 422 EVIDENCE_MISSING` proves the explanation prerequisite.
 - `dispatching a notification twice returns 409 CONFLICT` proves duplicate dispatch rejection.
 - `only the case origin coordinator may dispatch its result_reviewed notification` proves dispatch provider scoping.
+- `patient role receives 403 when dispatching a notification` proves patient dispatch denial.
 - `patient acknowledgement sets acknowledgedAt once and preserves workflow state` proves acknowledgement timestamp and state invariance.
+- `doctor role receives 403 when acknowledging a notification` proves staff acknowledgement denial.
 - `repeated patient acknowledgement returns 409 CONFLICT` proves duplicate acknowledgement rejection.
 - `patient cannot see another patient notification in their notification list` proves patient list isolation.
+- `patient cannot read another patient notification and receives 404` proves direct notification read concealment.
 - `patient cannot acknowledge another patient notification and receives 404` proves patient acknowledgement concealment.
 - `approved understanding confirmation does not change workflow state` proves understanding confirmation state invariance.
 - `understanding rejects an explanation belonging to a different case` proves explanation ownership validation.

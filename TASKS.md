@@ -98,10 +98,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: schedule/reschedule/mark attended or missed; log contact attempts; mandatory delay reason on overdue actions; follow-up items.
 - Accept: missed appointment path tested; contact attempts counted toward unreachable rule.
 
-### [ ] T-203 Notifications outbox and acknowledgement
+### [x] T-203 Notifications outbox and acknowledgement
 - Agent: Codex. Depends: T-105
-- Output: notification created on clinician approval and key changes (no clinical detail in text), patient acknowledge endpoint sets `acknowledgedAt`, in-app list.
-- Accept: acknowledgement does not change workflow state; notification text contains no diagnosis details (test).
+- Output: 13 neutral EN/AR notification templates; automatic templates are sent transactionally while `result_reviewed` remains queued for origin-provider coordinator dispatch; provider-scoped notification list/detail, patient acknowledgement and understanding routes, and provider-authorized consent request notifications.
+- Accept: templates reject clinical denylist terms and digits; dispatch requires an approved explanation and writes the sent timestamp/event/audit; patient actions are one-time and do not change state; unauthorized notification reads/actions are concealed or forbidden; evaluator requires a `result_reviewed` sent event.
+- Evidence (2026-11-04): `npm run lint`, `npm run build`, `npm test` (113/113), and `npm run test:db` (106/106) pass. The DB run includes 19 named notification HTTP scenarios, the catalog scan, and the exact-template transition regression. Live Compose curls returned HTTP 200 for coordinator dispatch (`SENT` + `NOTIFICATION_SENT`) and patient acknowledgement (`NOTIFICATION_ACKNOWLEDGED`). See `docs/07-Testing-and-Validation.md`.
 
 ### [ ] T-204 Consults
 - Agent: Codex. Depends: T-104

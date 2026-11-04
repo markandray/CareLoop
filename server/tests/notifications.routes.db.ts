@@ -61,13 +61,22 @@ after(async () => {
 test('patient lists own localized notifications with catalog text', async () => {
   const item = await makeCase(patientOne, originId);
   const notification = await makeNotification(item.id, patientUserId(patientOne), 'consent_needed', 'SENT');
-  const response = await request('PATIENT', 'GET', '/notifications');
-  assert.equal(response.status, 200);
-  const body = await response.json() as { items: Array<{ id: string; text: string; clinicallyReviewed: boolean }> };
-  const listed = body.items.find((entry) => entry.id === notification.id);
+  const items = await allNotifications('PATIENT');
+  const listed = items.find((entry) => entry.id === notification.id);
   assert.ok(listed);
   assert.match(listed.text, /request/);
   assert.equal(listed.clinicallyReviewed, true);
+});
+
+test('Arabic notification DTO marks its template as not clinically reviewed', async () => {
+  const item = await makeCase(patientTwo, originId);
+  const notification = await makeNotification(item.id, patientUserId(patientTwo), 'consent_needed', 'SENT', 'AR');
+  const items = await allNotifications('PATIENT', patientUserId(patientTwo));
+  const listed = items.find((entry) => entry.id === notification.id);
+  assert.ok(listed);
+  assert.equal(listed.language, 'AR');
+  assert.match(listed.text, /يرجى/);
+  assert.equal(listed.clinicallyReviewed, false);
 });
 
 test('coordinator notification list is limited to cases at their provider', async () => {
@@ -75,11 +84,9 @@ test('coordinator notification list is limited to cases at their provider', asyn
   const otherCase = await makeCase(patientTwo, otherProviderId);
   const own = await makeNotification(ownCase.id, patientUserId(patientOne), 'care_started', 'SENT');
   const foreign = await makeNotification(otherCase.id, patientUserId(patientTwo), 'care_started', 'SENT');
-  const response = await request('COORDINATOR', 'GET', '/notifications');
-  assert.equal(response.status, 200);
-  const body = await response.json() as { items: Array<{ id: string }> };
-  assert.ok(body.items.some((entry) => entry.id === own.id));
-  assert.ok(!body.items.some((entry) => entry.id === foreign.id));
+  const items = await allNotifications('COORDINATOR');
+  assert.ok(items.some((entry) => entry.id === own.id));
+  assert.ok(!items.some((entry) => entry.id === foreign.id));
 });
 
 test('admin can list notifications across providers', async () => {
@@ -87,11 +94,9 @@ test('admin can list notifications across providers', async () => {
   const otherCase = await makeCase(patientTwo, otherProviderId);
   const own = await makeNotification(ownCase.id, patientUserId(patientOne), 'care_started', 'SENT');
   const foreign = await makeNotification(otherCase.id, patientUserId(patientTwo), 'care_started', 'SENT');
-  const response = await request('ADMIN', 'GET', '/notifications');
-  assert.equal(response.status, 200);
-  const body = await response.json() as { items: Array<{ id: string }> };
-  assert.ok(body.items.some((entry) => entry.id === own.id));
-  assert.ok(body.items.some((entry) => entry.id === foreign.id));
+  const items = await allNotifications('ADMIN');
+  assert.ok(items.some((entry) => entry.id === own.id));
+  assert.ok(items.some((entry) => entry.id === foreign.id));
 });
 
 test('origin coordinator dispatches result_reviewed and writes sent event, timestamp, and audit', async () => {
@@ -137,6 +142,13 @@ test('only the case origin coordinator may dispatch its result_reviewed notifica
   assert.equal((await prisma.notification.findUniqueOrThrow({ where: { id: notification.id } })).status, 'QUEUED');
 });
 
+test('patient role receives 403 when dispatching a notification', async () => {
+  const item = await makeCase(patientOne, originId);
+  const notification = await makeNotification(item.id, patientUserId(patientOne), 'result_reviewed', 'QUEUED');
+  const response = await request('PATIENT', 'POST', `/notifications/${notification.id}/dispatch`, {});
+  assert.equal(response.status, 403);
+});
+
 test('patient acknowledgement sets acknowledgedAt once and preserves workflow state', async () => {
   const item = await makeCase(patientOne, originId, 'CLINICIAN_REVIEWED');
   const notification = await makeNotification(item.id, patientUserId(patientOne), 'referral_started', 'SENT');
@@ -147,6 +159,13 @@ test('patient acknowledgement sets acknowledgedAt once and preserves workflow st
   assert.equal(after.state, 'CLINICIAN_REVIEWED');
   assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: CaseEventType.NOTIFICATION_ACKNOWLEDGED } }));
   assert.ok(await prisma.auditLog.findFirst({ where: { action: 'NOTIFICATION_ACKNOWLEDGED', entityId: notification.id } }));
+});
+
+test('doctor role receives 403 when acknowledging a notification', async () => {
+  const item = await makeCase(patientOne, originId);
+  const notification = await makeNotification(item.id, patientUserId(patientOne), 'care_started', 'SENT');
+  const response = await request('DOCTOR', 'POST', `/notifications/${notification.id}/acknowledge`, {});
+  assert.equal(response.status, 403);
 });
 
 test('repeated patient acknowledgement returns 409 CONFLICT', async () => {
@@ -161,10 +180,15 @@ test('repeated patient acknowledgement returns 409 CONFLICT', async () => {
 test('patient cannot see another patient notification in their notification list', async () => {
   const item = await makeCase(patientTwo, originId);
   const notification = await makeNotification(item.id, patientUserId(patientTwo), 'care_started', 'SENT');
-  const response = await request('PATIENT', 'GET', '/notifications');
-  assert.equal(response.status, 200);
-  const body = await response.json() as { items: Array<{ id: string }> };
-  assert.ok(!body.items.some((entry) => entry.id === notification.id));
+  const items = await allNotifications('PATIENT');
+  assert.ok(!items.some((entry) => entry.id === notification.id));
+});
+
+test('patient cannot read another patient notification and receives 404', async () => {
+  const item = await makeCase(patientTwo, originId);
+  const notification = await makeNotification(item.id, patientUserId(patientTwo), 'care_started', 'SENT');
+  const response = await request('PATIENT', 'GET', `/notifications/${notification.id}`);
+  assert.equal(response.status, 404);
 });
 
 test('patient cannot acknowledge another patient notification and receives 404', async () => {
@@ -212,11 +236,31 @@ test('consent request from another provider cannot target an origin case', async
 
 function request(role: string, method: string, path: string, body?: unknown): Promise<globalThis.Response> {
   const id = ({ PATIENT: patientUserId(patientOne), DOCTOR: doctor, COORDINATOR: coordinator, OTHER_COORDINATOR: otherCoordinator, ADMIN: admin } as Record<string, string>)[role];
+  return requestFor(id, role, method, path, body);
+}
+
+function requestFor(id: string, role: string, method: string, path: string, body?: unknown): Promise<globalThis.Response> {
   const token = jwt.sign({ userId: id, role }, secret);
   return fetch(`${baseUrl}/api/v1${path}`, {
     method, headers: { Cookie: `careloop_session=${token}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
+}
+
+async function allNotifications(role: string, userId?: string): Promise<Array<{ id: string; text: string; language: string; clinicallyReviewed: boolean }>> {
+  const all: Array<{ id: string; text: string; language: string; clinicallyReviewed: boolean }> = [];
+  let cursor: string | null = null;
+  do {
+    const query = new URLSearchParams({ limit: '100', ...(cursor ? { cursor } : {}) });
+    const response = userId
+      ? await requestFor(userId, 'PATIENT', 'GET', `/notifications?${query}`)
+      : await request(role, 'GET', `/notifications?${query}`);
+    assert.equal(response.status, 200);
+    const page = await response.json() as { items: typeof all; nextCursor: string | null };
+    all.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return all;
 }
 
 async function provider(label: string) {
@@ -247,8 +291,8 @@ async function makeCase(patientId: string, providerId: string, state: CaseState 
   } });
 }
 
-async function makeNotification(caseId: string, userId: string, templateKey: 'result_reviewed' | 'consent_needed' | 'care_started' | 'referral_started', status: 'QUEUED' | 'SENT') {
-  return prisma.notification.create({ data: { caseId, userId, templateKey, status, language: 'EN', channel: 'PORTAL', createdAt: now, sentAt: status === 'SENT' ? now : null } });
+async function makeNotification(caseId: string, userId: string, templateKey: 'result_reviewed' | 'consent_needed' | 'care_started' | 'referral_started', status: 'QUEUED' | 'SENT', language: 'EN' | 'AR' = 'EN') {
+  return prisma.notification.create({ data: { caseId, userId, templateKey, status, language, channel: 'PORTAL', createdAt: now, sentAt: status === 'SENT' ? now : null } });
 }
 
 async function approvedExplanation(caseId: string) {

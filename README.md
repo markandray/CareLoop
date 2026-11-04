@@ -117,6 +117,55 @@ curl -i -b staff-cookies.txt "http://localhost:4000/api/v1/providers/$PROVIDER_I
 
 Revocation immediately removes receiving-provider access to the current referral packet, case reads, and lifecycle transitions. A new consent grant restores that access. Revoking consent for an active referral raises a human-facing LEVEL_1 operational escalation.
 
+## Notifications, acknowledgement, and understanding curl examples
+
+Log in as the coordinator at the case's origin provider. Reviewing a case creates a queued `result_reviewed` notification; the coordinator dispatches it only after an approved explanation exists. The other workflow notifications are sent automatically into the in-app outbox. Text comes from the neutral localized template catalog.
+
+```sh
+curl -i -c coordinator-cookies.txt http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"coordinator.screening@careloop.local","password":"CareLoopDemo2026!"}'
+
+curl -i -b coordinator-cookies.txt \
+  'http://localhost:4000/api/v1/notifications?limit=50'
+
+# Use the queued result_reviewed notification ID from the response.
+NOTIFICATION_ID='replace-with-notification-id'
+curl -i -b coordinator-cookies.txt -X POST \
+  "http://localhost:4000/api/v1/notifications/$NOTIFICATION_ID/dispatch" \
+  -H 'Content-Type: application/json' -d '{}'
+```
+
+The patient can then view their localized notification and acknowledge it. Acknowledgement and understanding confirmation record patient actions without advancing the case workflow state.
+
+```sh
+curl -i -c patient-cookies.txt http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"patient.en@careloop.local","password":"CareLoopDemo2026!"}'
+
+curl -i -b patient-cookies.txt http://localhost:4000/api/v1/notifications
+curl -i -b patient-cookies.txt -X POST \
+  "http://localhost:4000/api/v1/notifications/$NOTIFICATION_ID/acknowledge" \
+  -H 'Content-Type: application/json' -d '{}'
+
+# Understanding requires an approved explanation ID belonging to this case.
+CASE_ID='replace-with-case-id'
+EXPLANATION_ID='replace-with-approved-explanation-id'
+curl -i -b patient-cookies.txt -X POST \
+  "http://localhost:4000/api/v1/cases/$CASE_ID/understanding" \
+  -H 'Content-Type: application/json' \
+  -d "{\"explanationId\":\"$EXPLANATION_ID\"}"
+```
+
+An origin-provider doctor or coordinator can ask the patient to review a cross-provider sharing request. The endpoint sends a neutral `consent_needed` notification automatically.
+
+```sh
+curl -i -b coordinator-cookies.txt -X POST \
+  "http://localhost:4000/api/v1/cases/$CASE_ID/consent-requests" \
+  -H 'Content-Type: application/json' \
+  -d "{\"providerId\":\"$PROVIDER_ID\"}"
+```
+
 ## Transition curl examples
 
 The transition endpoint uses the expected current state and a strict, key-specific
