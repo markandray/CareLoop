@@ -171,6 +171,10 @@ Receiving-provider case reads, referral packets, and lifecycle transitions all u
 
 ## Explanation
 
+The shared explanation-core contract is `ReviewDraftFields` (`resultCategoryCode`, `nextStepCode`, `urgencyLabel`, `route`, optional `doctorNote`) and `ExplanationOutput` (`language`, sentence sections, `disclaimer`, `clinicallyReviewed`, optional `notTranslatedNote`, and `inputHash`). Stable codes are `ROUTINE_FINDING`, `FOLLOW_UP_NEEDED`, `UNCLEAR_RESULT`, `CONFIRMATION_NEEDED`, `REVIEW_NEEDED`; next-step codes are `CONFIRMATORY_TEST`, `SPECIALIST_REFERRAL`, `FOLLOW_UP_CLINICIAN`, `REPEAT_SCREENING`, `CARE_TEAM_CONTACT`, `NO_ACTION_NOW`. The matching nullable review-draft code columns are added by migration `20261104020000_review_draft_catalog_codes`.
+
+`doctorNote` is confined to its dedicated output section and is included in the canonical input hash, but it does not change any patient explanation sentence. Arabic output has `clinicallyReviewed: false` and includes `notTranslatedNote`. Generation and validation are deterministic; see `docs/06-AI-Design.md`.
+
 | Method and path                                       | Roles                                                                 | Request                     | Response                        | Errors / event or audit                                             |
 | ----------------------------------------------------- | --------------------------------------------------------------------- | --------------------------- | ------------------------------- | ------------------------------------------------------------------- |
 | `GET /cases/:id/explanations`                         | PATIENT own (approved only), DOCTOR scoped, COORDINATOR scoped, ADMIN | cursor query                | cursor page of `ExplanationDto` | `NOT_FOUND`, `FORBIDDEN`; audit sensitive read                      |

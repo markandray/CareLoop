@@ -141,8 +141,12 @@ export const ReviewDraftDtoSchema = StrictObject({
 export type ReviewDraftDto = z.infer<typeof ReviewDraftDtoSchema>;
 
 export const ReviewDraftFieldsSchema = StrictObject({
-  resultCategoryCode: z.string().trim().min(1).max(80),
-  nextStepCode: z.string().trim().min(1).max(80),
+  resultCategoryCode: z.enum([
+    'ROUTINE_FINDING', 'FOLLOW_UP_NEEDED', 'UNCLEAR_RESULT', 'CONFIRMATION_NEEDED', 'REVIEW_NEEDED',
+  ]),
+  nextStepCode: z.enum([
+    'CONFIRMATORY_TEST', 'SPECIALIST_REFERRAL', 'FOLLOW_UP_CLINICIAN', 'REPEAT_SCREENING', 'CARE_TEAM_CONTACT', 'NO_ACTION_NOW',
+  ]),
   urgencyLabel: UrgencySchema,
   route: z.enum(['CONFIRMATION', 'REFERRAL']),
   doctorNote: z.string().trim().max(2000).optional(),

@@ -1,4 +1,4 @@
-import { catalogSentences, fixedSentences } from './catalog';
+import { catalogSentences } from './catalog';
 import type { ExplanationOutput, Language, ReviewDraftFields } from '@careloop/shared';
 import type { ExplanationProvider } from './provider';
 import { TemplateExplanationProvider } from './provider';
