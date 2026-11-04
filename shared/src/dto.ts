@@ -140,6 +140,35 @@ export const ReviewDraftDtoSchema = StrictObject({
 });
 export type ReviewDraftDto = z.infer<typeof ReviewDraftDtoSchema>;
 
+export const ReviewDraftFieldsSchema = StrictObject({
+  resultCategoryCode: z.string().trim().min(1).max(80),
+  nextStepCode: z.string().trim().min(1).max(80),
+  urgencyLabel: UrgencySchema,
+  route: z.enum(['CONFIRMATION', 'REFERRAL']),
+  doctorNote: z.string().trim().max(2000).optional(),
+});
+export type ReviewDraftFields = z.infer<typeof ReviewDraftFieldsSchema>;
+
+export const ExplanationSectionsSchema = StrictObject({
+  resultMeaning: z.string(),
+  nextStep: z.string(),
+  meaningAndDiagnosis: z.string(),
+  contactClinic: z.string(),
+  limitations: z.string(),
+  doctorNote: z.string().nullable(),
+});
+export type ExplanationSections = z.infer<typeof ExplanationSectionsSchema>;
+
+export const ExplanationOutputSchema = StrictObject({
+  language: LanguageSchema,
+  sections: ExplanationSectionsSchema,
+  disclaimer: z.string(),
+  clinicallyReviewed: z.boolean(),
+  notTranslatedNote: z.string().optional(),
+  inputHash: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type ExplanationOutput = z.infer<typeof ExplanationOutputSchema>;
+
 export const DemoClockDtoSchema = StrictObject({
   now: UtcTimestampSchema,
   updatedAt: UtcTimestampSchema,

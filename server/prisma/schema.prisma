@@ -286,6 +286,8 @@ model ScreeningCase {
   recommendedNextStep      String?         @db.Text
   reviewDraftSummary       String?         @db.Text
   reviewDraftNextStep      String?         @db.Text
+  reviewDraftResultCategoryCode String?    @db.VarChar(80)
+  reviewDraftNextStepCode  String?         @db.VarChar(80)
   reviewDraftUrgencyLabel  Urgency?
   reviewRoute              String?         @db.VarChar(16)
   intakeUrgency            Urgency

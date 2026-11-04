@@ -47,7 +47,7 @@ A case owner is one user **or** one role/provider queue. Both may be absent for 
 - **User** — login identity, role, provider affiliation, and preferred language. `Patient` is a one-to-one profile for patient users.
 - **Provider** — simulated screening centre, hospital, or clinic. It anchors provider-scoped access, case origin, referral routing, queue ownership, and consent.
 - **Patient** — synthetic MRN, date of birth, preferred language/channel, and the patient account link.
-- **ScreeningCase** — one actionable screening result and its current state, clinical approval fields, owner, due date, acknowledgement timestamps, escalation level, escalation start time, and closure facts. While `NEW`, `reviewDraftSummary`, `reviewDraftNextStep`, and `reviewDraftUrgencyLabel` hold the clinician's pending review draft. `reviewRoute` stores the selected `CONFIRMATION` or `REFERRAL` route and remains available after review. `escalatedAt` is set while the case is above `LEVEL_0` and cleared at `LEVEL_0`; its PostgreSQL sequence generates public IDs such as `CL-1001` (starting at 1001).
+- **ScreeningCase** — one actionable screening result and its current state, clinical approval fields, owner, due date, acknowledgement timestamps, escalation level, escalation start time, and closure facts. While `NEW`, `reviewDraftSummary`, `reviewDraftNextStep`, `reviewDraftResultCategoryCode`, `reviewDraftNextStepCode`, and `reviewDraftUrgencyLabel` hold the clinician's pending review draft. `reviewRoute` stores the selected `CONFIRMATION` or `REFERRAL` route and remains available after review. `escalatedAt` is set while the case is above `LEVEL_0` and cleared at `LEVEL_0`; its PostgreSQL sequence generates public IDs such as `CL-1001` (starting at 1001).
 - **CaseEvent** — append-only lifecycle and in-state events, with optional state endpoints, actor type and user actor ID, timestamp, and structured payload. System events use `actorType = SYSTEM`; user events require a user actor ID.
 - **Evidence** — structured supporting records for transitions and closure decisions, attributed to the user who recorded them.
 - **Referral** — a provider-to-provider handoff with nullable `reason` and `respondedAt` recording when the receiving provider accepts or rejects it. Reassignment creates a new row; the former row can be retained as `SUPERSEDED` with any rejection reason intact.
@@ -66,6 +66,8 @@ A case owner is one user **or** one role/provider queue. Both may be absent for 
 The eighth additive migration adds the nullable review-draft fields and route to `ScreeningCase`. The route uses a checked `VARCHAR` rather than a Prisma enum so the agreed enums remain unchanged. The three draft values must be either all absent or all present; after `REVIEW_CASE`, the service copies them into approved case fields and clears the draft columns while retaining `reviewRoute`.
 
 The ninth additive migration adds nullable `Referral.reason` and `Appointment.location` text fields. Referral creation and appointment scheduling/rescheduling populate them from transition evidence; patient-facing appointment projections read `location` from the appointment row.
+
+The tenth additive migration adds nullable `reviewDraftResultCategoryCode` and `reviewDraftNextStepCode` columns so the structured explanation catalog selections can be retained with the existing clinician review draft. They remain nullable for existing and pre-catalog drafts.
 
 ## Enum contract
 
