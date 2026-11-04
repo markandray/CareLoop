@@ -404,7 +404,7 @@ export const NotificationDtoSchema = StrictObject({
   language: LanguageSchema,
   templateKey: NotificationTemplateKeySchema,
   text: z.string(),
-  clinicallyReviewed: z.boolean(),
+  reviewNotice: z.enum(['NONE', 'UNREVIEWED_TRANSLATION']),
   status: NotificationStatusSchema,
   createdAt: UtcTimestampSchema,
   sentAt: UtcTimestampSchema.nullable(),

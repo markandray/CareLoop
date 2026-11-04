@@ -59,17 +59,28 @@ after(async () => {
   await prisma.$disconnect();
 });
 
-test('patient lists own localized notifications with catalog text', async () => {
+test('notification DTOs omit clinical review claims and use language review notices', async () => {
   const item = await makeCase(patientOne, originId);
-  const notification = await makeNotification(item.id, patientUserId(patientOne), 'consent_needed', 'SENT');
+  const english = await makeNotification(item.id, patientUserId(patientOne), 'consent_needed', 'SENT', 'EN');
+  const arabic = await makeNotification(item.id, patientUserId(patientOne), 'consent_needed', 'SENT', 'AR');
+  const other = await makeNotification(item.id, patientUserId(patientOne), 'consent_needed', 'SENT', 'OTHER');
   const items = await allNotifications('PATIENT');
-  const listed = items.find((entry) => entry.id === notification.id);
-  assert.ok(listed);
-  assert.match(listed.text, /request/);
-  assert.equal(listed.clinicallyReviewed, true);
+  const englishDto = items.find((entry) => entry.id === english.id);
+  const arabicDto = items.find((entry) => entry.id === arabic.id);
+  const otherDto = items.find((entry) => entry.id === other.id);
+  assert.ok(englishDto);
+  assert.ok(arabicDto);
+  assert.ok(otherDto);
+  for (const dto of [englishDto, arabicDto, otherDto]) {
+    assert.equal(Object.hasOwn(dto, 'clinicallyReviewed'), false);
+  }
+  assert.match(englishDto.text, /request/);
+  assert.equal(englishDto.reviewNotice, 'NONE');
+  assert.equal(arabicDto.reviewNotice, 'UNREVIEWED_TRANSLATION');
+  assert.equal(otherDto.reviewNotice, 'NONE');
 });
 
-test('Arabic notification DTO marks its template as not clinically reviewed', async () => {
+test('Arabic notification DTO carries the unreviewed translation notice', async () => {
   const item = await makeCase(patientTwo, originId);
   const notification = await makeNotification(item.id, patientUserId(patientTwo), 'consent_needed', 'SENT', 'AR');
   const items = await allNotifications('PATIENT', patientUserId(patientTwo));
@@ -77,7 +88,7 @@ test('Arabic notification DTO marks its template as not clinically reviewed', as
   assert.ok(listed);
   assert.equal(listed.language, 'AR');
   assert.match(listed.text, /يرجى/);
-  assert.equal(listed.clinicallyReviewed, false);
+  assert.equal(listed.reviewNotice, 'UNREVIEWED_TRANSLATION');
 });
 
 test('coordinator notification list is limited to cases at their provider', async () => {
@@ -298,8 +309,10 @@ function requestFor(id: string, role: string, method: string, path: string, body
   });
 }
 
-async function allNotifications(role: string, userId?: string): Promise<Array<{ id: string; text: string; language: string; clinicallyReviewed: boolean }>> {
-  const all: Array<{ id: string; text: string; language: string; clinicallyReviewed: boolean }> = [];
+type NotificationTestDto = { id: string; text: string; language: string; reviewNotice: 'NONE' | 'UNREVIEWED_TRANSLATION'; [key: string]: unknown };
+
+async function allNotifications(role: string, userId?: string): Promise<NotificationTestDto[]> {
+  const all: NotificationTestDto[] = [];
   let cursor: string | null = null;
   do {
     const query = new URLSearchParams({ limit: '100', ...(cursor ? { cursor } : {}) });

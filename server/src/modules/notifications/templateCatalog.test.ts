@@ -18,7 +18,8 @@ test('every notification template is neutral in EN and AR with no clinical terms
       assert.doesNotMatch(template.text, denylist, `${key} ${language} has no clinical content`);
       assert.doesNotMatch(template.text, /[0-9٠-٩۰-۹]/, `${key} ${language} has no digits`);
     }
-    assert.equal(arabic.clinicallyReviewed, false, `${key} Arabic is marked unreviewed`);
-    assert.equal(english.clinicallyReviewed, true, `${key} English is marked reviewed`);
+    assert.equal(arabic.reviewNotice, 'UNREVIEWED_TRANSLATION', `${key} Arabic has an unreviewed translation notice`);
+    assert.equal(english.reviewNotice, 'NONE', `${key} English has no review notice`);
+    assert.equal(templateCatalog[key].OTHER.reviewNotice, 'NONE', `${key} OTHER has no review notice`);
   }
 });

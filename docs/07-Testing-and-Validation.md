@@ -106,8 +106,8 @@
 - `an automatic NOTIFICATION_SENT event does not satisfy result_reviewed dispatch evidence` proves the evaluator requires the exact review template key.
 - `automatic referral_started is SENT with its transition in one transaction` proves the referral transition commits with its automatically sent notification and event.
 - `automatic notification write failure rolls its transition back` proves a notification writer failure rolls back transition state and owned rows.
-- `patient lists own localized notifications with catalog text` proves patient notification listing and localized DTO text.
-- `Arabic notification DTO marks its template as not clinically reviewed` proves the Arabic review flag is false.
+- `notification DTOs omit clinical review claims and use language review notices` proves no returned notification DTO has `clinicallyReviewed`, with `UNREVIEWED_TRANSLATION` for Arabic and `NONE` for EN/OTHER.
+- `Arabic notification DTO carries the unreviewed translation notice` proves Arabic DTOs carry the explicit unreviewed-translation notice.
 - `coordinator notification list is limited to cases at their provider` proves staff notification scope.
 - `admin can list notifications across providers` proves admin notification visibility.
 - `origin coordinator dispatches result_reviewed and writes sent event, timestamp, and audit` proves dispatch authorization and atomic send records.

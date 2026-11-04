@@ -158,7 +158,7 @@ export function toNotificationDto(row: { id: string; caseId: string; channel: 'P
     id: row.id, caseId: row.caseId, channel: row.channel, language: row.language,
     templateKey: row.templateKey, status: row.status, createdAt: row.createdAt.toISOString(),
     sentAt: row.sentAt?.toISOString() ?? null, text: template.text,
-    clinicallyReviewed: template.clinicallyReviewed,
+    reviewNotice: template.reviewNotice,
   });
 }
 
