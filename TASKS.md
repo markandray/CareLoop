@@ -98,6 +98,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: schedule/reschedule/mark attended or missed; log contact attempts; mandatory delay reason on overdue actions; follow-up items.
 - Accept: missed appointment path tested; contact attempts counted toward unreachable rule.
 
+#### [x] T-202a Referral rejection, attendance, contact attempts
+- Agent: Codex. Branch: `task/T-202a-workflow-actions`.
+- Output: receiving-provider reject action and paged referral/appointment reads; coordinator attendance action; server-derived contact-attempt milestones with retry notification and LEVEL_2 threshold.
+- Evidence (2026-11-04): `npm run lint` and root `npm run build` pass; `npm test` reports 124/124; `npm run test:db` reports 141/141 pass, 0 fail. Added migration `20261104050000_appointment_attended_at`, named scenario tests, curl examples, and docs 02/04/05/07 updates. Commits: `c76bd28`, `df8c336`, `339b81d`, `20c4895`, `d1ff5ea`; see AGENTS.md Progress log.
+
 ### [x] T-203 Notifications outbox and acknowledgement
 - Agent: Codex. Depends: T-105
 - Output: 13 neutral EN/AR notification templates; automatic templates are sent transactionally while `result_reviewed` remains queued for origin-provider coordinator dispatch; provider-scoped notification list/detail, patient acknowledgement and understanding routes, and provider-authorized consent request notifications.
