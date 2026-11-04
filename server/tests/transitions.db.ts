@@ -170,6 +170,28 @@ test('full referral-to-care path persists state, owner, dueAt, events, and recei
   assert.equal(await prisma.notification.count({ where: { caseId: item.id, status: 'QUEUED' } }), 1);
 });
 
+test('an automatic NOTIFICATION_SENT event does not satisfy result_reviewed dispatch evidence', async () => {
+  const item = await makeCase('CLINICIAN_REVIEWED', false, 'REFERRAL', doctorOrigin);
+  await prisma.$transaction((tx) => appendEvent(tx, {
+    caseId: item.id,
+    type: CaseEventType.NOTIFICATION_SENT,
+    actorType: ActorType.SYSTEM,
+    payload: { templateKey: 'referral_started' },
+  }, clock));
+
+  await assert.rejects(
+    executeTransition(dependencies, actor(coordinatorOrigin, 'COORDINATOR', originId), item.id,
+      request('CREATE_REFERRAL_FROM_REVIEW', 'CLINICIAN_REVIEWED', {
+        toProviderId: receivingId,
+        referralReason: 'Synthetic referral request',
+      })),
+    (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'EVIDENCE_MISSING');
+      return true;
+    },
+  );
+});
+
 test('rejected referral reassignment supersedes the old row and resets ownership and SLA', async () => {
   const item = await makeCase('NEW', true, 'REFERRAL', doctorOrigin);
   const [english, arabic] = await approvedExplanations(item.id);
