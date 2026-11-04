@@ -38,6 +38,8 @@ export interface TransitionServiceDependencies {
   clock: Clock;
   /** Optional test seam; production writes audit records with the core writer. */
   auditWriter?: typeof record;
+  /** Optional test seam for verifying a notification write rolls the transition back. */
+  notificationWriter?: typeof queueNotification;
 }
 
 type CaseRecord = Prisma.ScreeningCaseGetPayload<object>;
@@ -215,7 +217,7 @@ export async function executeTransition(
     }
 
     if (evaluation.notificationTemplate) {
-      await queueNotification(tx, deps.clock, {
+      await (deps.notificationWriter ?? queueNotification)(tx, deps.clock, {
         caseId,
         templateKey: evaluation.notificationTemplate,
         actor: { actorType: ActorType.USER, actorId: actor.userId },

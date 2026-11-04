@@ -192,6 +192,50 @@ test('an automatic NOTIFICATION_SENT event does not satisfy result_reviewed disp
   );
 });
 
+test('automatic referral_started is SENT with its transition in one transaction', async () => {
+  const item = await makeCase('CLINICIAN_REVIEWED', false, 'REFERRAL', doctorOrigin);
+  await seedReviewedSent(item.id);
+
+  await executeTransition(dependencies, actor(coordinatorOrigin, 'COORDINATOR', originId), item.id,
+    request('CREATE_REFERRAL_FROM_REVIEW', 'CLINICIAN_REVIEWED', {
+      toProviderId: receivingId,
+      referralReason: 'Synthetic referral request',
+    }));
+
+  const after = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+  const notification = await prisma.notification.findFirstOrThrow({ where: { caseId: item.id, templateKey: 'referral_started' } });
+  assert.equal(after.state, 'REFERRAL_PENDING');
+  assert.equal(after.notifiedAt?.toISOString(), now.toISOString());
+  assert.equal(notification.status, 'SENT');
+  assert.equal(notification.sentAt?.toISOString(), now.toISOString());
+  assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: CaseEventType.NOTIFICATION_SENT, payload: { path: ['templateKey'], equals: 'referral_started' } } }));
+});
+
+test('automatic notification write failure rolls its transition back', async () => {
+  const item = await makeCase('CLINICIAN_REVIEWED', false, 'REFERRAL', doctorOrigin);
+  await seedReviewedSent(item.id);
+  const before = await counts(item.id);
+  const failingDependencies: TransitionServiceDependencies = {
+    ...dependencies,
+    notificationWriter: async () => { throw new Error('simulated notification write failure'); },
+  };
+
+  await assert.rejects(
+    executeTransition(failingDependencies, actor(coordinatorOrigin, 'COORDINATOR', originId), item.id,
+      request('CREATE_REFERRAL_FROM_REVIEW', 'CLINICIAN_REVIEWED', {
+        toProviderId: receivingId,
+        referralReason: 'Synthetic referral request',
+      })),
+    /simulated notification write failure/,
+  );
+
+  const after = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+  assert.equal(after.state, 'CLINICIAN_REVIEWED');
+  assert.equal(after.notifiedAt, null);
+  await assertCounts(item.id, before);
+  assert.equal(await prisma.referral.count({ where: { caseId: item.id } }), 0);
+});
+
 test('rejected referral reassignment supersedes the old row and resets ownership and SLA', async () => {
   const item = await makeCase('NEW', true, 'REFERRAL', doctorOrigin);
   const [english, arabic] = await approvedExplanations(item.id);

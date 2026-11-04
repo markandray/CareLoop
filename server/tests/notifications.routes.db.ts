@@ -4,9 +4,10 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { after, before, test } from 'node:test';
 import jwt from 'jsonwebtoken';
-import { CaseEventType, CaseState, PrismaClient, type Role } from '@prisma/client';
+import { ActorType, CaseEventType, CaseState, PrismaClient, type Role } from '@prisma/client';
 import { createApp } from '../src/app';
 import type { Clock } from '../src/core/clock';
+import { queueNotification } from '../src/modules/notifications/notificationService';
 
 const prisma = new PrismaClient();
 const now = new Date('2026-11-04T15:00:00.000Z');
@@ -149,9 +150,9 @@ test('patient role receives 403 when dispatching a notification', async () => {
   assert.equal(response.status, 403);
 });
 
-test('patient acknowledgement sets acknowledgedAt once and preserves workflow state', async () => {
+test('acknowledging result_reviewed sets acknowledgedAt and preserves workflow state', async () => {
   const item = await makeCase(patientOne, originId, 'CLINICIAN_REVIEWED');
-  const notification = await makeNotification(item.id, patientUserId(patientOne), 'referral_started', 'SENT');
+  const notification = await makeNotification(item.id, patientUserId(patientOne), 'result_reviewed', 'SENT');
   const response = await request('PATIENT', 'POST', `/notifications/${notification.id}/acknowledge`, {});
   assert.equal(response.status, 200);
   const responseBody = await response.json() as { event: { id: string; label: string; timestamp: string; patientStatus: string; type?: string } };
@@ -163,6 +164,52 @@ test('patient acknowledgement sets acknowledgedAt once and preserves workflow st
   assert.equal(after.state, 'CLINICIAN_REVIEWED');
   assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: CaseEventType.NOTIFICATION_ACKNOWLEDGED } }));
   assert.ok(await prisma.auditLog.findFirst({ where: { action: 'NOTIFICATION_ACKNOWLEDGED', entityId: notification.id } }));
+});
+
+test('acknowledging consent_needed writes its event and audit but leaves acknowledgedAt null', async () => {
+  const item = await makeCase(patientOne, originId);
+  const notification = await makeNotification(item.id, patientUserId(patientOne), 'consent_needed', 'SENT');
+  const response = await request('PATIENT', 'POST', `/notifications/${notification.id}/acknowledge`, {});
+  assert.equal(response.status, 200);
+  const after = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+  assert.equal(after.acknowledgedAt, null);
+  assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: CaseEventType.NOTIFICATION_ACKNOWLEDGED, payload: { path: ['notificationId'], equals: notification.id } } }));
+  assert.ok(await prisma.auditLog.findFirst({ where: { action: 'NOTIFICATION_ACKNOWLEDGED', entityId: notification.id } }));
+});
+
+test('later automatic notification acknowledgement is audited without changing the initial timestamp', async () => {
+  const item = await makeCase(patientOne, originId);
+  const first = await makeNotification(item.id, patientUserId(patientOne), 'result_reviewed', 'SENT');
+  assert.equal((await request('PATIENT', 'POST', `/notifications/${first.id}/acknowledge`, {})).status, 200);
+  const acknowledgedAt = (await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } })).acknowledgedAt;
+  assert.equal(acknowledgedAt?.toISOString(), now.toISOString());
+
+  const later = await makeNotification(item.id, patientUserId(patientOne), 'consent_needed', 'SENT');
+  assert.equal((await request('PATIENT', 'POST', `/notifications/${later.id}/acknowledge`, {})).status, 200);
+  const after = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+  assert.equal(after.acknowledgedAt?.toISOString(), acknowledgedAt?.toISOString());
+  assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: CaseEventType.NOTIFICATION_ACKNOWLEDGED, payload: { path: ['notificationId'], equals: later.id } } }));
+  assert.ok(await prisma.auditLog.findFirst({ where: { action: 'NOTIFICATION_ACKNOWLEDGED', entityId: later.id } }));
+});
+
+test('dispatch sets notifiedAt once and a later automatic notification preserves it', async () => {
+  const item = await makeCase(patientOne, originId);
+  await approvedExplanation(item.id);
+  const initial = await makeNotification(item.id, patientUserId(patientOne), 'result_reviewed', 'QUEUED');
+  const dispatched = await request('COORDINATOR', 'POST', `/notifications/${initial.id}/dispatch`, {});
+  assert.equal(dispatched.status, 200);
+  const firstNotifiedAt = (await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } })).notifiedAt;
+  assert.equal(firstNotifiedAt?.toISOString(), now.toISOString());
+
+  const automatic = await prisma.$transaction((tx) => queueNotification(tx, clock, {
+    caseId: item.id,
+    templateKey: 'consent_needed',
+    actor: { actorType: ActorType.USER, actorId: coordinator },
+  }));
+  assert.equal(automatic.status, 'SENT');
+  assert.equal(automatic.sentAt?.toISOString(), now.toISOString());
+  const afterAutomatic = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+  assert.equal(afterAutomatic.notifiedAt?.toISOString(), firstNotifiedAt?.toISOString());
 });
 
 test('doctor role receives 403 when acknowledging a notification', async () => {

@@ -104,6 +104,8 @@
 
 - `every notification template is neutral in EN and AR with no clinical terms or digits` proves all 13 catalog entries pass the denylist and digit scan.
 - `an automatic NOTIFICATION_SENT event does not satisfy result_reviewed dispatch evidence` proves the evaluator requires the exact review template key.
+- `automatic referral_started is SENT with its transition in one transaction` proves the referral transition commits with its automatically sent notification and event.
+- `automatic notification write failure rolls its transition back` proves a notification writer failure rolls back transition state and owned rows.
 - `patient lists own localized notifications with catalog text` proves patient notification listing and localized DTO text.
 - `Arabic notification DTO marks its template as not clinically reviewed` proves the Arabic review flag is false.
 - `coordinator notification list is limited to cases at their provider` proves staff notification scope.
@@ -113,7 +115,10 @@
 - `dispatching a notification twice returns 409 CONFLICT` proves duplicate dispatch rejection.
 - `only the case origin coordinator may dispatch its result_reviewed notification` proves dispatch provider scoping.
 - `patient role receives 403 when dispatching a notification` proves patient dispatch denial.
-- `patient acknowledgement sets acknowledgedAt once and preserves workflow state` proves acknowledgement timestamp, patient-safe event projection, and state invariance.
+- `acknowledging result_reviewed sets acknowledgedAt and preserves workflow state` proves the initial notification sets the case timestamp while preserving workflow state.
+- `acknowledging consent_needed writes its event and audit but leaves acknowledgedAt null` proves an automatic notification is acknowledged without changing the case timestamp.
+- `later automatic notification acknowledgement is audited without changing the initial timestamp` proves later acknowledgements remain recorded after the initial timestamp is set.
+- `dispatch sets notifiedAt once and a later automatic notification preserves it` proves later automatic sends cannot overwrite the first sent timestamp.
 - `doctor role receives 403 when acknowledging a notification` proves staff acknowledgement denial.
 - `repeated patient acknowledgement returns 409 CONFLICT` proves duplicate acknowledgement rejection.
 - `patient cannot see another patient notification in their notification list` proves patient list isolation.
