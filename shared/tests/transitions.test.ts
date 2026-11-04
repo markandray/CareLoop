@@ -304,8 +304,8 @@ describe('transition API contract', () => {
   it('validates review, explanation, patient creation, follow-up and list request shapes', () => {
     expect(
       ReviewDraftRequestSchema.safeParse({
-        resultSummary: 'Review draft summary',
-        recommendedNextStep: 'Confirm finding',
+        resultCategoryCode: 'FOLLOW_UP_NEEDED',
+        nextStepCode: 'CONFIRMATORY_TEST',
         urgencyLabel: 'ROUTINE',
         route: 'CONFIRMATION',
       }).success,

@@ -32,6 +32,7 @@ import {
 import { caseVisibility, type CaseActor } from './caseVisibility';
 import { loadFacts } from './transitionFacts';
 import { queueNotification } from '../notifications/notificationService';
+import { nextSteps, resultCategories } from '../explanation/catalog';
 
 export interface TransitionServiceDependencies {
   prisma: PrismaClient;
@@ -128,12 +129,13 @@ export async function executeTransition(
         : {}),
       ...(transition.transitionKey === 'REVIEW_CASE'
         ? {
-            resultSummaryApproved: caseRecord.reviewDraftSummary,
-            recommendedNextStep: caseRecord.reviewDraftNextStep,
+            resultSummaryApproved: caseRecord.reviewDraftResultCategoryCode
+              ? resultCategories[caseRecord.reviewDraftResultCategoryCode as keyof typeof resultCategories]?.EN ?? null
+              : null,
+            recommendedNextStep: caseRecord.reviewDraftNextStepCode
+              ? nextSteps[caseRecord.reviewDraftNextStepCode as keyof typeof nextSteps]?.EN ?? null
+              : null,
             urgencyLabel: caseRecord.reviewDraftUrgencyLabel,
-            reviewDraftSummary: null,
-            reviewDraftNextStep: null,
-            reviewDraftUrgencyLabel: null,
           }
         : {}),
       ...(transition.transitionKey === 'REASSIGN_REFERRAL'

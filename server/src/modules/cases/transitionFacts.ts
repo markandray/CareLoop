@@ -15,6 +15,8 @@ import type {
 } from '../../core/stateMachine/evaluateTransition';
 import type { TransitionActor } from '../../core/stateMachine/evaluateTransition';
 import { workflowConfig } from '../../config/workflowConfig';
+import { hashExplanationInput } from '../explanation/provider';
+import { ReviewDraftFieldsSchema } from '@careloop/shared';
 
 type Transaction = Prisma.TransactionClient;
 type CaseRecord = Prisma.ScreeningCaseGetPayload<object>;
@@ -100,12 +102,14 @@ export async function loadFacts(
       : Promise.resolve(null),
     (() => {
       const ids = context.evidence.approvedExplanationIds;
-      return Array.isArray(ids) && ids.every((id) => typeof id === 'string')
-        ? tx.explanationDraft.findMany({
+      const inputHash = currentDraftHash(caseRecord);
+      return inputHash && Array.isArray(ids) && ids.every((id) => typeof id === 'string')
+      ? tx.explanationDraft.findMany({
             where: {
               caseId: caseRecord.id,
               id: { in: ids as string[] },
               status: ExplanationStatus.APPROVED,
+              inputHash,
             },
             select: { id: true, language: true },
           })
@@ -181,12 +185,7 @@ export async function loadFacts(
   ]);
 
   const reviewRoute = caseRecord.reviewRoute;
-  const reviewDraftExists = Boolean(
-    caseRecord.reviewDraftSummary &&
-      caseRecord.reviewDraftNextStep &&
-      caseRecord.reviewDraftUrgencyLabel &&
-      reviewRoute,
-  );
+  const reviewDraftExists = currentDraftFields(caseRecord) !== null;
   const allowedRescheduleStatuses: readonly string[] = workflowConfig.reschedulableAppointmentStatuses;
   const facts: TransitionFacts = {
     caseAssignedToDoctor: Boolean(assignedDoctor),
@@ -249,4 +248,20 @@ export async function loadFacts(
         }
       : null,
   };
+}
+
+function currentDraftFields(row: CaseRecord) {
+  const parsed = ReviewDraftFieldsSchema.safeParse({
+    resultCategoryCode: row.reviewDraftResultCategoryCode,
+    nextStepCode: row.reviewDraftNextStepCode,
+    urgencyLabel: row.reviewDraftUrgencyLabel,
+    route: row.reviewRoute,
+    ...(row.reviewDraftDoctorNote ? { doctorNote: row.reviewDraftDoctorNote } : {}),
+  });
+  return parsed.success ? parsed.data : null;
+}
+
+function currentDraftHash(row: CaseRecord): string | null {
+  const fields = currentDraftFields(row);
+  return fields ? hashExplanationInput(fields) : null;
 }
