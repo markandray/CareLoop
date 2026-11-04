@@ -40,8 +40,8 @@ Request and response names below correspond to exported Zod schemas/types from `
 
 | Method and path            | Roles                      | Request      | Response                                                                   | Errors / event or audit              |
 | -------------------------- | -------------------------- | ------------ | -------------------------------------------------------------------------- | ------------------------------------ |
-| `GET /providers`           | Any authenticated role     | cursor query | cursor page of `ProviderSummary`                                           | `UNAUTHENTICATED`; audit read        |
-| `GET /providers/:id/staff` | DOCTOR, COORDINATOR, ADMIN | cursor query | cursor page of `ProviderStaffDto` containing only `id`, `name`, and `role` | `NOT_FOUND`, `FORBIDDEN`; audit read |
+| `GET /providers`           | Any authenticated role     | None         | `{items: ProviderSummary[]}` (`id`, `name`, `type`)                        | `UNAUTHENTICATED`; audit read        |
+| `GET /providers/:id/staff` | DOCTOR, COORDINATOR, ADMIN | None         | `{items: ProviderStaffDto[]}` containing only `id`, `name`, and `role`   | `NOT_FOUND`, `FORBIDDEN`; audit read |
 
 ## Cases
 
@@ -159,9 +159,11 @@ Dispatch is only manually available for `result_reviewed`; all other configured 
 
 | Method and path                         | Roles           | Request                                    | Response                               | Errors / event or audit                                                                     |
 | --------------------------------------- | --------------- | ------------------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `GET /patients/me/consents`             | PATIENT         | cursor query                               | cursor page of `ConsentDto`            | `FORBIDDEN`; audit                                                                          |
-| `POST /patients/me/consents`            | PATIENT         | `GrantConsentRequest` (`providerId,scope`) | `ConsentDto` and `CaseEventDtoPatient` | `NOT_FOUND`, `VALIDATION_ERROR`; `CONSENT_GRANTED`, audit                                   |
-| `POST /patients/me/consents/:id/revoke` | PATIENT (owner) | Empty                                      | `ConsentDto` and `CaseEventDtoPatient` | `NOT_FOUND`, `FORBIDDEN`; `CONSENT_REVOKED`, audit; receiving access is severed immediately |
+| `GET /patients/me/consents`             | PATIENT         | cursor query                               | cursor page of `ConsentDto`            | `FORBIDDEN`; audit `CONSENT_LIST_READ`                                                       |
+| `POST /patients/me/consents`            | PATIENT         | `GrantConsentRequest` (`providerId,scope`) | `201 {consent: ConsentDto}`             | `NOT_FOUND`, `VALIDATION_ERROR`, `CONFLICT`; `CONSENT_GRANTED`, audit and open-case events  |
+| `POST /patients/me/consents/:id/revoke` | PATIENT (owner) | Empty                                      | `{consent: ConsentDto}`                 | `NOT_FOUND`, `CONFLICT`; `CONSENT_REVOKED`, audit and open-case events; access severed now  |
+
+Consent rows are immutable grants: revocation sets `revokedAt`, and a later grant creates a new row. A provider/scope pair may have only one active grant. Revocation also raises LEVEL_1 operational escalation on active referral, accepted-referral, or scheduled-appointment cases whose current referral targets that provider, unless a higher escalation is already present.
 
 ## Explanation
 

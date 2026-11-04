@@ -14,6 +14,8 @@ import { requireRole } from './middleware/role/roleMiddleware';
 import { AuthService } from './modules/auth/authService';
 import { createAuthRouter } from './modules/auth/authRoutes';
 import { createCaseRouter } from './modules/cases/caseRoutes';
+import { createConsentRouter } from './modules/consent/consentRoutes';
+import { createProviderRouter } from './modules/providers/providerRoutes';
 
 export interface AppContext {
   prisma: PrismaClient;
@@ -62,6 +64,8 @@ export function createApp(
   );
 
   apiV1Router.use('/cases', createCaseRouter(prisma, clock, authenticate));
+  apiV1Router.use('/patients', createConsentRouter(prisma, clock, authenticate));
+  apiV1Router.use('/providers', createProviderRouter(prisma, clock, authenticate));
 
   // Development/test-only routes for verifying requireRole matrix and auth behaviors
   if (env.NODE_ENV !== 'production') {
