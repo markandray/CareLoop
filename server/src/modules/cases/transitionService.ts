@@ -5,7 +5,6 @@ import {
   CaseState,
   type DelayReason,
   EvidenceKind,
-  NotificationStatus,
   Prisma,
   ReferralStatus,
   type PrismaClient,
@@ -32,6 +31,7 @@ import {
 } from './caseProjection';
 import { caseVisibility, type CaseActor } from './caseVisibility';
 import { loadFacts } from './transitionFacts';
+import { queueNotification } from '../notifications/notificationService';
 
 export interface TransitionServiceDependencies {
   prisma: PrismaClient;
@@ -215,20 +215,10 @@ export async function executeTransition(
     }
 
     if (evaluation.notificationTemplate) {
-      const patient = await tx.patient.findUniqueOrThrow({
-        where: { id: caseRecord.patientId },
-        select: { userId: true, preferredLanguage: true, preferredChannel: true },
-      });
-      await tx.notification.create({
-        data: {
-          caseId,
-          userId: patient.userId,
-          channel: patient.preferredChannel,
-          language: patient.preferredLanguage,
-          templateKey: evaluation.notificationTemplate,
-          status: NotificationStatus.QUEUED,
-          createdAt: now,
-        },
+      await queueNotification(tx, deps.clock, {
+        caseId,
+        templateKey: evaluation.notificationTemplate,
+        actor: { actorType: ActorType.USER, actorId: actor.userId },
       });
     }
 

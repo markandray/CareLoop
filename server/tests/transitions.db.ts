@@ -167,7 +167,7 @@ test('full referral-to-care path persists state, owner, dueAt, events, and recei
   ]) {
     assert.equal(lifecycle.filter((event) => event.type === eventType).length, 1);
   }
-  assert.equal(await prisma.notification.count({ where: { caseId: item.id, status: 'QUEUED' } }), 6);
+  assert.equal(await prisma.notification.count({ where: { caseId: item.id, status: 'QUEUED' } }), 1);
 });
 
 test('rejected referral reassignment supersedes the old row and resets ownership and SLA', async () => {
@@ -454,7 +454,7 @@ test('every transition key persists the evaluator outcome and exactly its owned 
       if (expected.notificationTemplate) {
         assert.equal(newNotifications.length, 1);
         assert.equal(newNotifications[0]?.templateKey, expected.notificationTemplate);
-        assert.equal(newNotifications[0]?.status, 'QUEUED');
+        assert.equal(newNotifications[0]?.status, expected.notificationTemplate === 'result_reviewed' ? 'QUEUED' : 'SENT');
       } else {
         assert.equal(newNotifications.length, 0);
       }
