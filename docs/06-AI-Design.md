@@ -15,3 +15,7 @@ The provider accepts only `ReviewDraftFields`: stable result category and next-s
 ## Future provider extension
 
 An LLM could later implement the same `ExplanationProvider.generate(fields, language)` interface. It would remain optional and disabled by default. Any proposed rewrite would pass through the same validator, with the deterministic template as fallback. This task makes no LLM calls and adds no LLM dependency.
+
+## API approval flow
+
+A doctor scoped to the case origin provider saves the structured `ReviewDraftFields` only while the case is `NEW`. Generation validates the bilingual catalog output and persists one template row per language with the canonical SHA-256 input hash. A repeated generation for the unchanged hash returns those rows; a changed draft produces a new pair and preserves older rows as history. Doctors approve each current draft separately. Approval records the injected clock time, actor, immutable case event and audit row. Patient and coordinator reads include only approved rows whose hash matches the present review draft; doctor reads include history with a current/stale flag. `REVIEW_CASE` rechecks both approved language rows against the current hash inside transition fact loading, so editing a draft invalidates prior approvals without deleting them.

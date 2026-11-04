@@ -102,6 +102,16 @@
 
 ## T-203 — Notifications, acknowledgement, and understanding
 
+## T-401b — Review draft and explanation API (partial; HTTP scenario tests pending)
+
+- `npm run lint` passed after the API and migration changes.
+- Root `npm run build` passed for Next.js, server TypeScript, and shared TypeScript.
+- `npm test`: 5 test files passed, 124 passed, 0 failed.
+- `npm run test:db`: 66 top-level TAP tests, 3 suites, 111 tests, 111 passed, 0 failed; migration `20261104030000_explanation_input_hash` was applied to `careloop_test`.
+- Live Compose curl against seeded synthetic accounts: case create 201; doctor draft save 200; generate 200; EN approve 200; AR approve 200; `REVIEW_CASE` 200; coordinator notification list and dispatch 200; patient notification list and acknowledgement 200; patient explanation list and understanding confirmation 200.
+- A first live draft-save attempt exposed the existing complete-draft check constraint; draft save was corrected to also persist catalog-derived legacy summary fields and the walkthrough then passed.
+- No new named T-401b HTTP tests were added in this partial delivery. Missing evidence includes named scenarios for permissions/provider concealment, idempotency, stale drafts and approvals, incomplete draft, patient filtering, safe note text, and audit reads. The live walkthrough was successful but does not replace those tests.
+
 - `every notification template is neutral in EN and AR with no clinical terms or digits` proves all 13 catalog entries pass the denylist and digit scan.
 - `an automatic NOTIFICATION_SENT event does not satisfy result_reviewed dispatch evidence` proves the evaluator requires the exact review template key.
 - `automatic referral_started is SENT with its transition in one transaction` proves the referral transition commits with its automatically sent notification and event.
