@@ -136,7 +136,7 @@ Scheduling and rescheduling are lifecycle transitions `SCHEDULE_APPOINTMENT` and
 
 ## Contact attempts
 
-`GET /cases/:id/contact-attempts` and `POST /cases/:id/contact-attempts` are restricted to a COORDINATOR at the origin provider or at the receiving provider while a live PENDING/ACCEPTED referral and active consent exist. The strict POST body accepts only `channel`, `outcome`, optional `notes`, and optional `delayReason`; client-supplied `milestoneState`, `referralId`, and `appointmentId` are rejected. The server derives the current case state and latest non-superseded referral or current scheduled/missed appointment. Failed counts use the exact derived `(caseId, milestoneState, referralId, appointmentId)` tuple, so milestones are not combined. FAILED and NO_ANSWER queue and send `unreachable_retry`; the third failed outcome for one tuple raises LEVEL_2. Both endpoints audit writes/reads.
+`GET /cases/:id/contact-attempts` and `POST /cases/:id/contact-attempts` are restricted to a COORDINATOR at the origin provider or at the receiving provider while a live PENDING/ACCEPTED referral and active consent exist. The strict POST body accepts only `channel`, `outcome`, optional `notes`, and optional `delayReason`; client-supplied `milestoneState`, `referralId`, and `appointmentId` are rejected. The server derives the current case state and links either the latest non-superseded referral or the current scheduled/missed appointment (never both). Failed counts use the exact derived `(caseId, milestoneState, referralId, appointmentId)` tuple, so milestones are not combined. FAILED and NO_ANSWER queue and send `unreachable_retry`; the third failed outcome for one tuple raises LEVEL_2. Both endpoints audit writes/reads.
 
 ## Notifications
 

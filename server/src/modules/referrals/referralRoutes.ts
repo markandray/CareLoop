@@ -35,7 +35,7 @@ export function createReferralRouter(prisma: PrismaClient, clock: Clock, authent
     try {
       const id = uuidParam(req.params.id);
       const result = await withTransaction(prisma, async (tx) => {
-        const found = await tx.referral.findUnique({ where: { id }, select: { id: true, caseId: true, fromProviderId: true, toProviderId: true, status: true, screeningCase: { select: { patientId: true, state: true, intakeUrgency: true } } } });
+        const found = await tx.referral.findUnique({ where: { id }, select: { id: true, caseId: true, fromProviderId: true, toProviderId: true, status: true, screeningCase: { select: { patientId: true, state: true, intakeUrgency: true, urgencyLabel: true } } } });
         if (!found) throw AppError.notFound('Referral not found.');
         if (req.user!.providerId !== found.toProviderId) throw AppError.forbidden('Only the receiving provider may reject this referral.');
         if (found.fromProviderId !== found.toProviderId) {
@@ -48,7 +48,7 @@ export function createReferralRouter(prisma: PrismaClient, clock: Clock, authent
         if (referral.status !== 'PENDING' || found.screeningCase.state !== 'REFERRAL_PENDING') throw AppError.conflict('Only a pending referral can be rejected.');
         const now = clock.now();
         const updated = await tx.referral.update({ where: { id }, data: { status: 'REJECTED', rejectionReason: req.body.rejectionReason, respondedAt: now, updatedAt: now } });
-        await tx.screeningCase.update({ where: { id: found.caseId }, data: { ownerUserId: null, ownerQueueRole: 'COORDINATOR', ownerQueueProviderId: found.fromProviderId, dueAt: dueAtFor('rejectedReferralReassign', found.screeningCase.intakeUrgency, now), updatedAt: now } });
+        await tx.screeningCase.update({ where: { id: found.caseId }, data: { ownerUserId: null, ownerQueueRole: 'COORDINATOR', ownerQueueProviderId: found.fromProviderId, dueAt: dueAtFor('rejectedReferralReassign', found.screeningCase.urgencyLabel ?? found.screeningCase.intakeUrgency, now), updatedAt: now } });
         const event = await appendEvent(tx, { caseId: found.caseId, type: CaseEventType.REFERRAL_REJECTED, actorType: ActorType.USER, actorId: req.user!.id, payload: { referralId: id, rejectionReason: req.body.rejectionReason, ...(req.body.note ? { note: req.body.note } : {}) } }, clock);
         await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'REFERRAL_REJECTED', entityType: 'Referral', entityId: id }, clock);
         return { referral: ReferralDtoSchema.parse({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString(), respondedAt: updated.respondedAt?.toISOString() ?? null }), event: { id: event.id, type: event.type, createdAt: event.createdAt } };
@@ -88,7 +88,7 @@ function uuidParam(value: string | string[] | undefined): string {
 function pageResponse<T extends z.ZodTypeAny>(rows: Array<Record<string, unknown>>, limit: number, now: Date, itemSchema: T) {
   const hasMore = rows.length > limit;
   const pageRows = hasMore ? rows.slice(0, limit) : rows;
-  const items = pageRows.map((row) => itemSchema.parse({ ...row, createdAt: (row.createdAt as Date).toISOString(), updatedAt: (row.updatedAt as Date).toISOString(), scheduledAt: row.scheduledAt instanceof Date ? row.scheduledAt.toISOString() : row.scheduledAt }));
+  const items = pageRows.map((row) => itemSchema.parse({ ...row, createdAt: (row.createdAt as Date).toISOString(), updatedAt: (row.updatedAt as Date).toISOString(), scheduledAt: row.scheduledAt instanceof Date ? row.scheduledAt.toISOString() : row.scheduledAt, attendedAt: row.attendedAt instanceof Date ? row.attendedAt.toISOString() : row.attendedAt }));
   const last = pageRows[pageRows.length - 1];
   return makeCursorPageSchema(itemSchema).parse({ items, nextCursor: hasMore && last ? encodeCursor(last.createdAt as Date, last.id as string) : null, updatedAt: now.toISOString() });
 }

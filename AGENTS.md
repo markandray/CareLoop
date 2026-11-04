@@ -341,6 +341,7 @@ docs/
 | 52 | Persisted explanation rows carry the canonical structured-input SHA-256 hash; current approvals are those matching the case's present structured draft | Retains stale drafts as history while making draft edits invalidate approvals without mutating prior explanation rows |
 | 53 | Explanation history is indexed, not unique, by `(caseId, language, createdAt)` | Multiple generations must remain append-only even when the injected clock gives successive drafts the same timestamp |
 | 54 | After a coordinator records attendance, the case stays `APPOINTMENT_SCHEDULED` with a recovery window of 24 h routine / 4 h urgent; `Appointment.attendedAt` records the timestamp | Attendance is an operational fact; the receiving doctor remains responsible for the separate `START_CARE` transition |
+| 55 | Contact-attempt clients send no milestone IDs; the server links either the current non-superseded referral or the active appointment from the addressed case | Prevents callers from attributing an attempt to another case and keeps escalation counts isolated by milestone |
 
 ## 16. Resolved decisions
 

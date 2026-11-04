@@ -13,7 +13,7 @@ export const workflowConfig = {
     referralAcceptance: { ROUTINE: 3 * DAY_MS, URGENT: 24 * HOUR_MS },
     rejectedReferralReassign: { ROUTINE: 24 * HOUR_MS, URGENT: 4 * HOUR_MS },
     appointmentScheduling: { ROUTINE: 7 * DAY_MS, URGENT: 48 * HOUR_MS },
-    appointmentRecovery: { ROUTINE: 24 * HOUR_MS, URGENT: 4 * HOUR_MS },
+    appointmentRecoveryWindow: { ROUTINE: 24 * HOUR_MS, URGENT: 4 * HOUR_MS },
     consultationResponse: { ROUTINE: 24 * HOUR_MS, URGENT: 4 * HOUR_MS },
     defaultFollowUpInterval: { ROUTINE: 30 * DAY_MS, URGENT: 30 * DAY_MS },
     // Product Requirements §8.2 specifies appointment time + 2 days for either urgency tier.

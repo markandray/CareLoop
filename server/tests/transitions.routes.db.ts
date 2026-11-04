@@ -377,6 +377,8 @@ describe('T-105b transition HTTP routes', () => {
     assert.equal(currentCase.ownerQueueRole, 'COORDINATOR');
     assert.equal(currentCase.ownerQueueProviderId, originId);
     assert.equal(currentCase.dueAt?.toISOString(), new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString());
+    assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: 'REFERRAL_REJECTED', payload: { path: ['referralId'], equals: referral.id } } }));
+    assert.ok(await prisma.auditLog.findFirst({ where: { action: 'REFERRAL_REJECTED', entityId: referral.id } }));
   });
 
   test('T-202a referral rejection is forbidden to the origin coordinator', async () => {
@@ -389,6 +391,24 @@ describe('T-105b transition HTTP routes', () => {
     const item = await makeCase('REFERRAL_PENDING');
     const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'REJECTED', rejectionReason: 'No capacity', respondedAt: now } });
     assert.equal((await api('COORDINATOR_RECEIVING', 'POST', `/referrals/${referral.id}/reject`, { rejectionReason: 'Again' })).status, 409);
+  });
+
+  test('T-202a unrelated provider cannot reject a referral', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING' } });
+    await assertError(await api('COORDINATOR_ALTERNATE', 'POST', `/referrals/${referral.id}/reject`, { rejectionReason: 'No capacity' }), 403, 'FORBIDDEN');
+  });
+
+  test('T-202a rejected referral can be reassigned and resets receiving owner and SLA', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING' } });
+    assert.equal((await api('COORDINATOR_RECEIVING', 'POST', `/referrals/${referral.id}/reject`, { rejectionReason: 'No capacity' })).status, 200);
+    const reassigned = await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/transitions`, { transitionKey: 'REASSIGN_REFERRAL', expectedState: 'REFERRAL_PENDING', evidence: { toProviderId: alternateId, referralReason: 'Alternative provider.' } });
+    assert.equal(reassigned.status, 200);
+    const currentCase = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+    assert.equal(currentCase.ownerQueueProviderId, alternateId);
+    assert.equal(currentCase.ownerQueueRole, 'COORDINATOR');
+    assert.equal(currentCase.dueAt?.toISOString(), new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString());
   });
 
   test('T-202a ATTENDED records timestamp, event, audit and 24 hour recovery deadline without starting care', async () => {
@@ -416,6 +436,7 @@ describe('T-105b transition HTTP routes', () => {
     assert.equal(currentCase.dueAt?.toISOString(), new Date(now.getTime() + 4 * 60 * 60 * 1000).toISOString());
     assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: 'APPOINTMENT_MISSED' } }));
     assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: 'DELAY_REASON_RECORDED' } }));
+    assert.ok(await prisma.auditLog.findFirst({ where: { action: 'APPOINTMENT_MISSED', entityId: appointment.id } }));
   });
 
   test('T-202a MISSED without delayReason returns 422 DELAY_REASON_REQUIRED', async () => {
@@ -426,6 +447,93 @@ describe('T-105b transition HTTP routes', () => {
   test('T-202a attendance is denied to origin coordinator', async () => {
     const { appointment } = await scheduledAppointmentForAttendance();
     await assertError(await api('COORDINATOR_ORIGIN', 'POST', `/appointments/${appointment.id}/attendance`, { status: 'ATTENDED' }), 403, 'FORBIDDEN');
+  });
+
+  test('T-202a attendance on an appointment that is no longer scheduled returns 409', async () => {
+    const { appointment } = await scheduledAppointmentForAttendance();
+    await prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'MISSED', delayReason: 'PATIENT_UNREACHABLE' } });
+    await assertError(await api('COORDINATOR_RECEIVING', 'POST', `/appointments/${appointment.id}/attendance`, { status: 'ATTENDED' }), 409, 'CONFLICT');
+  });
+
+  test('T-202a contact attempt derives current referral milestone and rejects client milestone identifiers', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING' } });
+    const response = await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'REACHED' });
+    assert.equal(response.status, 201);
+    const saved = await prisma.contactAttempt.findFirstOrThrow({ where: { caseId: item.id } });
+    assert.equal(saved.milestoneState, 'REFERRAL_PENDING');
+    assert.equal(saved.referralId, referral.id);
+    assert.equal(saved.appointmentId, null);
+    assert.equal((await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'REACHED', referralId: randomUUID() })).status, 400);
+    assert.equal((await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'REACHED', appointmentId: randomUUID() })).status, 400);
+  });
+
+  test('T-202a the second failed contact attempt does not raise LEVEL_2 and the third does', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING' } });
+    for (let index = 1; index <= 2; index += 1) {
+      const response = await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'FAILED' });
+      assert.equal(response.status, 201);
+      const row = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+      assert.equal(row.escalationLevel, 'LEVEL_0');
+    }
+    assert.equal((await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'NO_ANSWER' })).status, 201);
+    const after = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+    assert.equal(after.escalationLevel, 'LEVEL_2');
+  });
+
+  test('T-202a failed counts are isolated when the case advances to a different milestone', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING' } });
+    for (let index = 0; index < 2; index += 1) await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'FAILED' });
+    await prisma.screeningCase.update({ where: { id: item.id }, data: { state: 'APPOINTMENT_SCHEDULED' } });
+    const appointment = await prisma.appointment.create({ data: { referralId: referral.id, scheduledAt: new Date(now.getTime() + 86_400_000) } });
+    const response = await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'FAILED' });
+    assert.equal(response.status, 201);
+    const result = await response.json() as { contactAttempt: { id: string } };
+    const row = await prisma.contactAttempt.findUniqueOrThrow({ where: { id: result.contactAttempt.id } });
+    assert.equal(row.milestoneState, 'APPOINTMENT_SCHEDULED');
+    assert.equal(row.appointmentId, appointment.id);
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } })).escalationLevel, 'LEVEL_0');
+  });
+
+  test('T-202a failed contact sends unreachable_retry while REACHED does not', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING' } });
+    await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'REACHED' });
+    assert.equal(await prisma.notification.count({ where: { caseId: item.id, templateKey: 'unreachable_retry' } }), 0);
+    await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'NO_ANSWER' });
+    assert.equal(await prisma.notification.count({ where: { caseId: item.id, templateKey: 'unreachable_retry', status: 'SENT' } }), 1);
+    const retry = await prisma.notification.findFirstOrThrow({ where: { caseId: item.id, templateKey: 'unreachable_retry' } });
+    assert.ok(await prisma.auditLog.findFirst({ where: { action: 'UNREACHABLE_RETRY_SENT', entityId: retry.id } }));
+  });
+
+  test('T-202a patient and doctor cannot write contact attempts', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    await assertError(await api('PATIENT', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'REACHED' }), 403, 'FORBIDDEN');
+    await assertError(await api('DOCTOR', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'REACHED' }), 403, 'FORBIDDEN');
+  });
+
+  test('T-202a contact attempt write creates audit row and a readable attempt list', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING' } });
+    const response = await api('COORDINATOR_ORIGIN', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PORTAL', outcome: 'REACHED' });
+    assert.equal(response.status, 201);
+    const attempt = await prisma.contactAttempt.findFirstOrThrow({ where: { caseId: item.id } });
+    assert.ok(await prisma.auditLog.findFirst({ where: { action: 'CONTACT_ATTEMPT_LOGGED', entityId: attempt.id } }));
+    const list = await api('COORDINATOR_ORIGIN', 'GET', `/cases/${item.id}/contact-attempts?limit=10`);
+    assert.equal(list.status, 200);
+    assert.equal((await list.json() as { items: unknown[] }).items.length, 1);
+  });
+
+  test('T-202a receiving coordinator can contact only while a live consented referral exists', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING' } });
+    assert.equal((await api('COORDINATOR_RECEIVING', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'REACHED' })).status, 201);
+    assert.equal((await api('COORDINATOR_RECEIVING', 'GET', `/cases/${item.id}/contact-attempts`)).status, 200);
+    assert.equal((await api('COORDINATOR_RECEIVING', 'POST', `/referrals/${referral.id}/reject`, { rejectionReason: 'Capacity unavailable' })).status, 200);
+    assert.equal((await api('COORDINATOR_RECEIVING', 'POST', `/cases/${item.id}/contact-attempts`, { channel: 'PHONE', outcome: 'REACHED' })).status, 404);
+    assert.equal((await api('COORDINATOR_RECEIVING', 'GET', `/cases/${item.id}/contact-attempts`)).status, 404);
   });
 
   test('route returns every transition error status and code', async () => {

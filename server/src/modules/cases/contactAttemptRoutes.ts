@@ -1,5 +1,5 @@
 import { ActorType, CaseEventType, type PrismaClient } from '@prisma/client';
-import { ContactAttemptDtoSchema, ContactAttemptRequestSchema, CursorQuerySchema, makeCursorPageSchema, UuidSchema } from '@careloop/shared';
+import { CaseIdSchema, ContactAttemptDtoSchema, ContactAttemptRequestSchema, CursorQuerySchema, makeCursorPageSchema } from '@careloop/shared';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { Clock } from '../../core/clock';
 import { appendEvent } from '../../core/eventLog';
@@ -22,7 +22,7 @@ export function createContactAttemptRouter(
 
   router.post('/:id/contact-attempts', validateBody(ContactAttemptRequestSchema), async (req, res, next) => {
     try {
-      const parsed = UuidSchema.safeParse(req.params.id);
+      const parsed = CaseIdSchema.safeParse(req.params.id);
       if (!parsed.success) throw AppError.notFound('Case not found.');
       const result = await withTransaction(prisma, async (tx) => {
         await tx.$queryRaw`SELECT "id" FROM "ScreeningCase" WHERE "id" = ${parsed.data} FOR UPDATE`;
@@ -46,7 +46,7 @@ export function createContactAttemptRouter(
           caseId: caseRecord.id,
           byUserId: req.user!.id,
           milestoneState: caseRecord.state,
-          referralId: currentReferral?.id ?? null,
+          referralId: currentAppointment ? null : currentReferral?.id ?? null,
           appointmentId: currentAppointment?.id ?? null,
           channel: input.channel,
           outcome: input.outcome,
@@ -56,8 +56,9 @@ export function createContactAttemptRouter(
         } });
         await appendEvent(tx, { caseId: caseRecord.id, type: CaseEventType.CONTACT_ATTEMPT_LOGGED, actorType: ActorType.USER, actorId: req.user!.id, payload: { contactAttemptId: attempt.id, milestoneState: attempt.milestoneState, referralId: attempt.referralId, appointmentId: attempt.appointmentId, channel: attempt.channel, outcome: attempt.outcome, delayReason: attempt.delayReason } }, clock);
         if (input.outcome === 'FAILED' || input.outcome === 'NO_ANSWER') {
-          await queueNotification(tx, clock, { caseId: caseRecord.id, templateKey: 'unreachable_retry', actor: { actorType: ActorType.USER, actorId: req.user!.id } });
-          const failedCount = await tx.contactAttempt.count({ where: { caseId: caseRecord.id, milestoneState: caseRecord.state, referralId: currentReferral?.id ?? null, appointmentId: currentAppointment?.id ?? null, outcome: { in: ['FAILED', 'NO_ANSWER'] } } });
+          const retryNotification = await queueNotification(tx, clock, { caseId: caseRecord.id, templateKey: 'unreachable_retry', actor: { actorType: ActorType.USER, actorId: req.user!.id } });
+          await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'UNREACHABLE_RETRY_SENT', entityType: 'Notification', entityId: retryNotification.id }, clock);
+          const failedCount = await tx.contactAttempt.count({ where: { caseId: caseRecord.id, milestoneState: caseRecord.state, referralId: currentAppointment ? null : currentReferral?.id ?? null, appointmentId: currentAppointment?.id ?? null, outcome: { in: ['FAILED', 'NO_ANSWER'] } } });
           if (failedCount === workflowConfig.thresholds.failedContactAttempts) await raiseEscalation(tx, { caseId: caseRecord.id, level: 'LEVEL_2', reason: 'Three failed contact attempts for the current workflow milestone.', now }, clock);
         }
         await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'CONTACT_ATTEMPT_LOGGED', entityType: 'ContactAttempt', entityId: attempt.id }, clock);
@@ -69,17 +70,23 @@ export function createContactAttemptRouter(
 
   router.get('/:id/contact-attempts', validateQuery(CursorQuerySchema), async (req, res, next) => {
     try {
-      const parsed = UuidSchema.safeParse(req.params.id);
+      const parsed = CaseIdSchema.safeParse(req.params.id);
       if (!parsed.success) throw AppError.notFound('Case not found.');
       const query = CursorQuerySchema.parse(req.query);
       const cursor = query.cursor ? decodeCursor(query.cursor) : undefined;
       const result = await withTransaction(prisma, async (tx) => {
-        const caseRecord = await tx.screeningCase.findUnique({ where: { id: parsed.data }, select: { id: true, originProviderId: true } });
+        const caseRecord = await tx.screeningCase.findUnique({ where: { id: parsed.data }, select: { id: true, originProviderId: true, patientId: true } });
         if (!caseRecord) throw AppError.notFound('Case not found.');
         const isOrigin = req.user!.providerId === caseRecord.originProviderId;
         if (!isOrigin) {
-          const live = await tx.referral.findFirst({ where: { caseId: caseRecord.id, toProviderId: req.user!.providerId ?? '00000000-0000-0000-0000-000000000000', status: { in: ['PENDING', 'ACCEPTED'] } }, select: { id: true } });
+          const receivingProviderId = req.user!.providerId ?? '00000000-0000-0000-0000-000000000000';
+          const live = await tx.referral.findFirst({ where: { caseId: caseRecord.id, toProviderId: receivingProviderId, status: { in: ['PENDING', 'ACCEPTED'] } }, select: { id: true, fromProviderId: true } });
           if (!live) throw AppError.notFound('Case not found.');
+          if (live.fromProviderId !== receivingProviderId) {
+            const now = clock.now();
+            const consent = await tx.consent.findFirst({ where: { patientId: caseRecord.patientId, providerId: receivingProviderId, scope: 'CROSS_PROVIDER_REFERRAL', grantedAt: { lte: now }, OR: [{ revokedAt: null }, { revokedAt: { gt: now } }] }, select: { id: true } });
+            if (!consent) throw new AppError(403, 'CONSENT_REQUIRED', 'Active cross-provider consent is required.');
+          }
         }
         const rows = await tx.contactAttempt.findMany({ where: { caseId: caseRecord.id, ...(cursor ? { OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit + 1 });
         await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'CONTACT_ATTEMPT_LIST_READ', entityType: 'ScreeningCase', entityId: caseRecord.id }, clock);

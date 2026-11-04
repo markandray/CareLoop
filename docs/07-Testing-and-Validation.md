@@ -152,3 +152,17 @@
 - `consent request from another provider cannot target an origin case` proves consent request provider authorization.
 
 All database HTTP tests run with `node:test` against PostgreSQL through `npm run test:db`; they use synthetic fixtures. The API tests exercise the Express application in-process. No live external notification delivery is performed; `SENT` means the in-app outbox row was dispatched.
+
+## T-202a — Referral rejection, attendance, and contact attempts
+
+- `npm run lint` passed.
+- Root `npm run build` passed for Next.js, server TypeScript, and shared TypeScript. Next.js printed its existing ESLint plugin configuration warning.
+- `npm test`: 5 test files passed, 124 passed, 0 failed.
+- `npm run test:db`: 68 top-level TAP tests across 3 suites; 141 tests, 141 passed, 0 failed. Migration `20261104050000_appointment_attended_at` applied to `careloop_test`.
+- `T-202a concurrent identical explanation generation leaves exactly one EN and one AR draft` verifies row-lock serialization.
+- `T-202a receiving coordinator rejection records response and returns ownership to the origin queue`, `T-202a referral rejection is forbidden to the origin coordinator`, `T-202a rejected referral cannot be rejected twice`, and `T-202a unrelated provider cannot reject a referral` verify referral status, permissions, timing, event, and audit behavior.
+- `T-202a rejected referral can be reassigned and resets receiving owner and SLA` verifies hand-back followed by reassignment.
+- `T-202a ATTENDED records timestamp, event, audit and 24 hour recovery deadline without starting care`, `T-202a MISSED records reason events and urgent four hour recovery deadline`, `T-202a MISSED without delayReason returns 422 DELAY_REASON_REQUIRED`, `T-202a attendance is denied to origin coordinator`, and `T-202a attendance on an appointment that is no longer scheduled returns 409` cover attendance outcomes, authorization, and state conflicts.
+- `T-202a contact attempt derives current referral milestone and rejects client milestone identifiers`, `T-202a the second failed contact attempt does not raise LEVEL_2 and the third does`, and `T-202a failed counts are isolated when the case advances to a different milestone` cover server-derived milestone links and escalation counting.
+- `T-202a failed contact sends unreachable_retry while REACHED does not`, `T-202a patient and doctor cannot write contact attempts`, `T-202a contact attempt write creates audit row and a readable attempt list`, and `T-202a receiving coordinator can contact only while a live consented referral exists` cover notification, RBAC, audit, listing, and receiving-provider scope.
+- Not exercised: a browser UI workflow for these new actions, live external notification delivery, or a deployment with real providers/data. The notification remains an in-app outbox write.

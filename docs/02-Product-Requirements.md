@@ -137,8 +137,8 @@ A receiving-provider user is a DOCTOR or COORDINATOR affiliated with the provide
 When a referral is rejected or cannot be fulfilled:
 1. Reassignment does not overwrite the existing referral row; it appends a new referral row with a new `referralId`.
 2. The case remains in state `REFERRAL_PENDING`.
-3. The sending coordinator must reassign the referral within the configured reassign window (24h routine / 4h urgent).
-4. `dueAt` resets to `now + referral acceptance SLA` (3d routine / 24h urgent) assigned to the new receiving provider's coordinator queue.
+3. On rejection, ownership moves immediately to the origin provider's COORDINATOR queue and `dueAt` is set to `now + rejected-referral reassign window` (24h routine / 4h urgent).
+4. The sending coordinator must reassign the referral within that window. On reassignment, `dueAt` resets to `now + referral acceptance SLA` (3d routine / 24h urgent) assigned to the new receiving provider's coordinator queue.
 5. The case reassignment counter increments. If reassignment count reaches 3, the case escalates to LEVEL_2.
 
 ---
