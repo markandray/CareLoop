@@ -161,6 +161,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 ## Phase 4 — Intelligence and analytics (Days 12-14)
 
 ### [ ] T-401 Explanation service
+#### [x] T-401a Explanation core
+- Agent: Codex. Depends: T-104
+- Output: bilingual stable-code catalog, shared structured fields/output contracts, deterministic template provider, SHA-256 canonical input hash, validator and template fallback; no LLM calls.
+- Evidence (2026-11-04): `npm run lint`, `npm run build`, and `npm test` pass; Vitest reports 124/124 tests across five files. Tests cover deterministic output, bilingual catalog coverage, catalog-only output, digits (including Arabic-Indic), denylist terms, invented text, note leakage, Arabic review flag, hash sensitivity, and note/body independence. Additive migration `20261104020000_review_draft_catalog_codes` adds the two missing nullable draft-code columns. The database migration was not applied in this task.
+- Remaining T-401 work: persistence/API integration and any provider wiring required by T-402; this task deliberately made no LLM calls.
 - Agent: Codex. Depends: T-104
 - Output: `modules/explanation` with template generator (en/ar), `ExplanationProvider` interface, optional LLM provider (off by default), output validator, fallback to template.
 - Accept: works with no API key; validator rejects added diagnoses/drugs/numbers (tests); output stored as `ExplanationDraft`.
