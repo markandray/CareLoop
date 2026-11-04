@@ -107,9 +107,19 @@
 - `npm run lint` passed after the API and migration changes.
 - Root `npm run build` passed for Next.js, server TypeScript, and shared TypeScript.
 - `npm test`: 5 test files passed, 124 passed, 0 failed.
-- `npm run test:db`: 68 top-level TAP tests, 3 suites, 113 tests, 113 passed, 0 failed; migration `20261104030000_explanation_input_hash` was applied to `careloop_test`.
+- `npm run test:db`: 68 top-level TAP tests, 3 suites, 123 tests, 123 passed, 0 failed; migrations `20261104030000_explanation_input_hash` and `20261104040000_explanation_history_index` were applied to `careloop_test`.
 - `patient case detail separates a safe clinician note from explanation text` verifies a safe note is not embedded in serialized patient-facing text and is separately labelled.
 - `patient case detail suppresses clinician notes containing digits or denylist terms` verifies unsafe clinician note text is omitted from the patient-facing DTO.
+- `T-401b HTTP journey creates case, drafts, approvals, review, dispatch, acknowledgement, explanation read, and understanding` covers the requested HTTP-created first-half demo journey.
+- `T-401b generate rejects an incomplete review draft with 422 EVIDENCE_MISSING` covers incomplete draft handling.
+- `T-401b patients and coordinators receive 403 for draft, generate, and approve actions` covers role denials.
+- `T-401b doctor from another provider receives 404 for draft, generation, and approval` covers provider scoping and concealment.
+- `T-401b patient explanation list never returns a DRAFT row` covers patient draft filtering.
+- `T-401b coordinator sees only approved current explanations without case clinical fields` covers coordinator filtering and minimization.
+- `T-401b origin doctor sees stale explanation history with current labels` covers doctor history visibility.
+- `T-401b changed draft generation creates a new bilingual pair and retains old rows` covers stale history and same-timestamp generation.
+- `T-401b editing a review draft makes approvals stale and REVIEW_CASE fail` covers stale approval invalidation, patient stale filtering, and transition evidence.
+- `T-401b approving an already approved explanation returns 409 CONFLICT` covers repeat approval.
 - Live Compose curl against seeded synthetic accounts: case create 201; doctor draft save 200; generate 200; EN approve 200; AR approve 200; `REVIEW_CASE` 200; coordinator notification list and dispatch 200; patient notification list and acknowledgement 200; patient explanation list and understanding confirmation 200.
 - A first live draft-save attempt exposed the existing complete-draft check constraint; draft save was corrected to also persist catalog-derived legacy summary fields and the walkthrough then passed.
 - No dedicated named T-401b HTTP journey tests were added in this partial delivery. Missing evidence includes route-specific permissions/provider concealment, idempotency, stale drafts and approvals, incomplete draft, patient filtering, and sensitive-read audit scenarios. The live walkthrough was successful but does not replace those tests.

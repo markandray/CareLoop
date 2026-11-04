@@ -160,13 +160,13 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 
 ## Phase 4 — Intelligence and analytics (Days 12-14)
 
-### [ ] T-401 Explanation service
+### [x] T-401 Explanation service
 #### [x] T-401a Explanation core
 - Agent: Codex. Depends: T-104
 - Output: bilingual stable-code catalog, shared structured fields/output contracts, deterministic template provider, SHA-256 canonical input hash, validator and template fallback; no LLM calls.
 - Evidence (2026-11-04): `npm run lint`, `npm run build`, and `npm test` pass; Vitest reports 124/124 tests across five files. Tests cover deterministic output, bilingual catalog coverage, catalog-only output, digits (including Arabic-Indic), denylist terms, invented text, note leakage, Arabic review flag, hash sensitivity, and note/body independence. Additive migration `20261104020000_review_draft_catalog_codes` adds the two missing nullable draft-code columns. The database migration was not applied in this task.
-- Remaining T-401 work: persistence/API integration and any provider wiring required by T-402; this task deliberately made no LLM calls.
-- T-401b API partial (2026-11-04): structured draft save, hashed EN/AR template generation, explanation reads/approval, and current-hash `REVIEW_CASE` facts are implemented in commits `002608b`, `76aecb6`, `b48be0c`, `05f9a3f`, `708dbac`, `8c89702`, `ccfb0a3`. Migration `20261104030000_explanation_input_hash` applied by `npm run test:db`; lint/root build/shared tests pass and the DB suite passes 113/113. Added two patient note projection safety scenarios. Live curl verified create, save, generate, approve EN/AR, review, coordinator dispatch, patient list/acknowledge/read/understand. Still incomplete: requested dedicated named T-401b HTTP journey and remaining endpoint negative-path tests are not present; do not mark T-401/T-402 complete. `docs/07` records evidence and gaps.
+- Remaining T-401 work: none for the template-first service and API scope; this task deliberately made no LLM calls.
+- T-401b API evidence (2026-11-04): structured draft save, hashed EN/AR generation, role-filtered reads/approval, and current-hash `REVIEW_CASE` facts are implemented. Named DB HTTP tests cover the first-half journey, idempotency, history, role/provider denial, stale approvals, patient/coordinator filtering, note safety and audit reads. `npm run lint`, root `npm run build`, `npm test` (124/124), and `npm run test:db` (123/123) pass. Both additive migrations applied. Live Compose curl verified every walkthrough endpoint returned HTTP 200 (case create 201). See `docs/07`.
 - Agent: Codex. Depends: T-104
 - Output: `modules/explanation` with template generator (en/ar), `ExplanationProvider` interface, optional LLM provider (off by default), output validator, fallback to template.
 - Accept: works with no API key; validator rejects added diagnoses/drugs/numbers (tests); output stored as `ExplanationDraft`.
@@ -174,7 +174,7 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 ### [ ] T-402 Clinician approval of explanation
 - Agent: Codex (API) + Antigravity (UI). Depends: T-401, T-303
 - Accept: patient cannot see an unapproved explanation (test); approval is audited.
-- API partial is included in T-401b; full named HTTP journey and negative-path tests remain outstanding, along with UI work.
+- API is complete and tested in T-401b. Remaining T-402 work is clinician approval UI integration and owner review.
 
 ### [ ] T-403 Analytics endpoints
 - Agent: Codex. Depends: T-205

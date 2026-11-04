@@ -56,7 +56,7 @@ A case owner is one user **or** one role/provider queue. Both may be absent for 
 - **FollowUp** — an owned action and due date during care. Its status is `OPEN`, `COMPLETED`, or `CANCELLED`.
 - **Consult** — patient-to-clinician or clinician-to-clinician question, response, participants, and status.
 - **Notification** — in-app outbox entry with recipient, channel label, language, template key, and queued/sent timestamps; it does not store clinical message text.
-- **ExplanationDraft** — localized template/LLM output and its draft/approval state, including the approving clinician and approval time.
+- **ExplanationDraft** — localized template/LLM output and its draft/approval state, including the approving clinician and approval time. `inputHash` binds each row to the canonical structured review draft; prior hash rows are retained as stale history. History allows multiple rows per case/language even when the injectable clock gives them the same timestamp.
 - **Consent** — patient authorization for a receiving provider and scope, retained as a grant/revocation record rather than overwritten.
 - **AuditLog** — append-only record of actor type, optional user actor ID, action, entity type/id, and time for security and administrative auditing. `SYSTEM` identifies automation; `USER` requires an actor ID.
 - **SystemSetting** — keyed JSON configuration with update time and optional user attribution. The demo clock offset is stored here so it survives a server restart; the same table backs admin configuration reads and writes.
@@ -68,6 +68,8 @@ The eighth additive migration adds the nullable review-draft fields and route to
 The ninth additive migration adds nullable `Referral.reason` and `Appointment.location` text fields. Referral creation and appointment scheduling/rescheduling populate them from transition evidence; patient-facing appointment projections read `location` from the appointment row.
 
 The tenth additive migration adds nullable `reviewDraftResultCategoryCode` and `reviewDraftNextStepCode` columns so the structured explanation catalog selections can be retained with the existing clinician review draft. They remain nullable for existing and pre-catalog drafts.
+
+The eleventh additive migration adds `ExplanationDraft.inputHash` (legacy rows receive a non-current sentinel hash) and `ScreeningCase.reviewDraftDoctorNote`. The twelfth migration replaces the unique `(caseId, language, createdAt)` index with a non-unique history lookup index so regenerating after an edit cannot collide when two writes share a clock timestamp.
 
 ## Enum contract
 
