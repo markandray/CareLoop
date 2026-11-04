@@ -501,7 +501,7 @@ model ExplanationDraft {
   screeningCase ScreeningCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
   approver      User?         @relation("ExplanationApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
 
-  @@unique([caseId, language, createdAt])
+  @@index([caseId, language, createdAt])
   @@index([caseId, status])
   @@index([approvedBy, approvedAt])
 }

@@ -412,6 +412,7 @@ function explanationDto(
   let doctorNote: string | null = null;
   try {
     const parsed = JSON.parse(explanation.text) as { sections?: { doctorNote?: unknown } };
+    delete (parsed as { inputHash?: unknown }).inputHash;
     if (typeof parsed.sections?.doctorNote === 'string') {
       doctorNote = parsed.sections.doctorNote;
       delete parsed.sections.doctorNote;

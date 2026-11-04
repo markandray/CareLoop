@@ -317,6 +317,7 @@ function explanationResponse(item: { id: string; language: 'EN' | 'AR' | 'OTHER'
   const doctorNote = typeof sections.doctorNote === 'string' ? sections.doctorNote : null;
   const safeSections = { ...sections };
   delete safeSections.doctorNote;
+  delete output.inputHash;
   return {
     id: item.id,
     language: item.language,

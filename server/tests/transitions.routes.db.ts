@@ -113,6 +113,134 @@ after(async () => {
 });
 
 describe('T-105b transition HTTP routes', () => {
+  test('T-401b HTTP journey creates case, drafts, approvals, review, dispatch, acknowledgement, explanation read, and understanding', async () => {
+    const created = await createCaseHttp();
+    assert.equal(created.status, 201);
+    const caseId = (await created.json() as { case: { id: string } }).case.id;
+    assert.equal((await api('DOCTOR', 'PUT', `/cases/${caseId}/review-draft`, completeDraft())).status, 200);
+    const generated = await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/generate`, {});
+    assert.equal(generated.status, 200);
+    const drafts = (await generated.json() as { explanations: Array<{ id: string; language: string }> }).explanations;
+    const en = drafts.find((item) => item.language === 'EN')!;
+    const ar = drafts.find((item) => item.language === 'AR')!;
+    const repeated = await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/generate`, {});
+    assert.deepEqual((await repeated.json() as { explanations: Array<{ id: string }> }).explanations.map((item) => item.id), drafts.map((item) => item.id));
+    assert.equal((await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/${en.id}/approve`, {})).status, 200);
+    assert.equal((await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/${ar.id}/approve`, {})).status, 200);
+    assert.equal((await api('DOCTOR', 'POST', `/cases/${caseId}/transitions`, { transitionKey: 'REVIEW_CASE', expectedState: 'NEW', evidence: { approvedExplanationIds: [en.id, ar.id] } })).status, 200);
+    const queued = await prisma.notification.findFirstOrThrow({ where: { caseId, templateKey: 'result_reviewed' } });
+    assert.equal((await api('COORDINATOR_ORIGIN', 'POST', `/notifications/${queued.id}/dispatch`, {})).status, 200);
+    const listed = await api('PATIENT', 'GET', '/notifications');
+    assert.equal(listed.status, 200);
+    assert.equal((await api('PATIENT', 'POST', `/notifications/${queued.id}/acknowledge`, {})).status, 200);
+    const visible = await api('PATIENT', 'GET', `/cases/${caseId}/explanations`);
+    assert.equal(visible.status, 200);
+    const visibleItems = (await visible.json() as { items: Array<{ id: string; text: string; doctorNoteSection: { label: string; text: string } | null }> }).items;
+    assert.deepEqual(new Set(visibleItems.map((item) => item.id)), new Set([en.id, ar.id]));
+    for (const item of visibleItems) {
+      assert.doesNotMatch(item.text, /\p{N}|cancer|tumou?r|aspirin|insulin|سرطان|سكري|دواء/iu);
+      assert.equal(item.doctorNoteSection?.label, 'Not translated');
+      assert.equal(item.text.includes('Please discuss the next step.'), false);
+    }
+    const readAudit = await prisma.auditLog.findFirst({ where: { action: 'EXPLANATIONS_READ', entityId: caseId, actorId: users.PATIENT.id } });
+    assert.ok(readAudit);
+    assert.equal((await api('PATIENT', 'POST', `/cases/${caseId}/understanding`, { explanationId: en.id })).status, 200);
+  });
+
+  test('T-401b generate rejects an incomplete review draft with 422 EVIDENCE_MISSING', async () => {
+    const caseId = (await createCaseHttp().then(async (r) => (await r.json() as { case: { id: string } }).case.id));
+    await assertError(await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/generate`, {}), 422, 'EVIDENCE_MISSING');
+  });
+
+  test('T-401b patients and coordinators receive 403 for draft, generate, and approve actions', async () => {
+    const caseId = await newCaseWithDraft();
+    const ids = await draftIds(caseId);
+    for (const actor of ['PATIENT', 'COORDINATOR_ORIGIN'] as const) {
+      await assertError(await api(actor, 'PUT', `/cases/${caseId}/review-draft`, completeDraft()), 403, 'FORBIDDEN');
+      await assertError(await api(actor, 'POST', `/cases/${caseId}/explanations/generate`, {}), 403, 'FORBIDDEN');
+      await assertError(await api(actor, 'POST', `/cases/${caseId}/explanations/${ids.en}/approve`, {}), 403, 'FORBIDDEN');
+    }
+  });
+
+  test('T-401b doctor from another provider receives 404 for draft, generation, and approval', async () => {
+    const caseId = await newCaseWithDraft();
+    const ids = await draftIds(caseId);
+    await assertError(await api('DOCTOR_RECEIVING', 'PUT', `/cases/${caseId}/review-draft`, completeDraft()), 404, 'NOT_FOUND');
+    await assertError(await api('DOCTOR_RECEIVING', 'POST', `/cases/${caseId}/explanations/generate`, {}), 404, 'NOT_FOUND');
+    await assertError(await api('DOCTOR_RECEIVING', 'POST', `/cases/${caseId}/explanations/${ids.en}/approve`, {}), 404, 'NOT_FOUND');
+  });
+
+  test('T-401b patient explanation list never returns a DRAFT row', async () => {
+    const caseId = await newCaseWithDraft();
+    await draftIds(caseId);
+    const response = await api('PATIENT', 'GET', `/cases/${caseId}/explanations`);
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json() as { items: unknown[] }).items, []);
+  });
+
+  test('T-401b coordinator sees only approved current explanations without case clinical fields', async () => {
+    const caseId = await newCaseWithDraft();
+    const ids = await draftIds(caseId);
+    await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/${ids.en}/approve`, {});
+    await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/${ids.ar}/approve`, {});
+    const response = await api('COORDINATOR_ORIGIN', 'GET', `/cases/${caseId}/explanations`);
+    assert.equal(response.status, 200);
+    const items = (await response.json() as { items: Array<Record<string, unknown>> }).items;
+    assert.equal(items.length, 2);
+    assert.ok(items.every((item) => item.status === 'APPROVED' && item.current === true));
+    for (const item of items) {
+      assert.equal(Object.hasOwn(item, 'resultCategory'), false);
+      assert.equal(Object.hasOwn(item, 'resultSummaryApproved'), false);
+      assert.equal(Object.hasOwn(item, 'patient'), false);
+    }
+  });
+
+  test('T-401b origin doctor sees stale explanation history with current labels', async () => {
+    const caseId = await newCaseWithDraft();
+    const first = await draftIds(caseId);
+    await api('DOCTOR', 'PUT', `/cases/${caseId}/review-draft`, { ...completeDraft(), resultCategoryCode: 'UNCLEAR_RESULT' });
+    const response = await api('DOCTOR', 'GET', `/cases/${caseId}/explanations`);
+    assert.equal(response.status, 200);
+    const items = (await response.json() as { items: Array<{ id: string; current: boolean; stale?: boolean }> }).items;
+    assert.equal(items.length, 2);
+    assert.ok(items.every((item) => item.current === false && item.stale === true));
+    assert.ok(items.some((item) => item.id === first.en));
+    assert.ok(items.some((item) => item.id === first.ar));
+  });
+
+  test('T-401b changed draft generation creates a new bilingual pair and retains old rows', async () => {
+    const caseId = await newCaseWithDraft();
+    const old = await draftIds(caseId);
+    await api('DOCTOR', 'PUT', `/cases/${caseId}/review-draft`, { ...completeDraft(), resultCategoryCode: 'UNCLEAR_RESULT' });
+    const fresh = await draftIds(caseId);
+    assert.notEqual(fresh.en, old.en);
+    assert.notEqual(fresh.ar, old.ar);
+    assert.equal(await prisma.explanationDraft.count({ where: { caseId } }), 4);
+    const history = await api('DOCTOR', 'GET', `/cases/${caseId}/explanations`);
+    const rows = (await history.json() as { items: Array<{ id: string; current: boolean }> }).items;
+    assert.equal(rows.length, 4);
+    assert.equal(rows.filter((item) => item.current).length, 2);
+  });
+
+  test('T-401b editing a review draft makes approvals stale and REVIEW_CASE fail', async () => {
+    const caseId = await newCaseWithDraft();
+    const ids = await draftIds(caseId);
+    await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/${ids.en}/approve`, {});
+    await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/${ids.ar}/approve`, {});
+    await api('DOCTOR', 'PUT', `/cases/${caseId}/review-draft`, { ...completeDraft(), resultCategoryCode: 'UNCLEAR_RESULT' });
+    const patientRead = await api('PATIENT', 'GET', `/cases/${caseId}/explanations`);
+    assert.deepEqual((await patientRead.json() as { items: unknown[] }).items, []);
+    await assertError(await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/${ids.en}/approve`, {}), 409, 'CONFLICT');
+    await assertError(await api('DOCTOR', 'POST', `/cases/${caseId}/transitions`, { transitionKey: 'REVIEW_CASE', expectedState: 'NEW', evidence: { approvedExplanationIds: [ids.en, ids.ar] } }), 422, 'EVIDENCE_MISSING');
+  });
+
+  test('T-401b approving an already approved explanation returns 409 CONFLICT', async () => {
+    const caseId = await newCaseWithDraft();
+    const ids = await draftIds(caseId);
+    assert.equal((await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/${ids.en}/approve`, {})).status, 200);
+    await assertError(await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/${ids.en}/approve`, {}), 409, 'CONFLICT');
+  });
+
   test('HTTP happy journey uses each provider role and receiving DTO remains a ReferralPacket', async () => {
     const item = await makeCase('NEW', { route: 'REFERRAL', assigned: true });
     const explanations = await approvedExplanations(item.id);
@@ -365,6 +493,47 @@ describe('T-105b transition HTTP routes', () => {
 });
 
 type ActorKey = keyof typeof users;
+
+function completeDraft() {
+  return { resultCategoryCode: 'FOLLOW_UP_NEEDED', nextStepCode: 'SPECIALIST_REFERRAL', urgencyLabel: 'ROUTINE', route: 'REFERRAL', doctorNote: 'Please discuss the next step.' };
+}
+
+async function api(actor: ActorKey, method: string, path: string, body?: unknown): Promise<Response> {
+  return fetch(`${baseUrl}/api/v1${path}`, {
+    method,
+    headers: { ...authHeaders(actor), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+async function createCaseHttp(): Promise<Response> {
+  return api('ADMIN', 'POST', '/cases', { transitionKey: 'CREATE_CASE', evidence: {
+    patientId,
+    originProviderId: originId,
+    assignedDoctorId: users.DOCTOR.id,
+    pathway: 'Synthetic screening pathway',
+    screeningType: 'Synthetic screening',
+    resultCategory: 'Synthetic actionable result',
+    preliminarySummary: 'Synthetic intake summary.',
+    recommendedAction: 'Clinician review required.',
+    intakeUrgency: 'ROUTINE',
+  } });
+}
+
+async function newCaseWithDraft(): Promise<string> {
+  const response = await createCaseHttp();
+  assert.equal(response.status, 201);
+  const caseId = (await response.json() as { case: { id: string } }).case.id;
+  assert.equal((await api('DOCTOR', 'PUT', `/cases/${caseId}/review-draft`, completeDraft())).status, 200);
+  return caseId;
+}
+
+async function draftIds(caseId: string): Promise<{ en: string; ar: string }> {
+  const response = await api('DOCTOR', 'POST', `/cases/${caseId}/explanations/generate`, {});
+  assert.equal(response.status, 200);
+  const rows = (await response.json() as { explanations: Array<{ id: string; language: string }> }).explanations;
+  return { en: rows.find((row) => row.language === 'EN')!.id, ar: rows.find((row) => row.language === 'AR')!.id };
+}
 
 async function transition(actor: ActorKey | undefined, caseId: string, body: unknown): Promise<Response> {
   return fetch(`${baseUrl}/api/v1/cases/${caseId}/transitions`, {
