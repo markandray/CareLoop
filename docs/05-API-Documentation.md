@@ -40,8 +40,8 @@ Request and response names below correspond to exported Zod schemas/types from `
 
 | Method and path            | Roles                      | Request      | Response                                                                   | Errors / event or audit              |
 | -------------------------- | -------------------------- | ------------ | -------------------------------------------------------------------------- | ------------------------------------ |
-| `GET /providers`           | Any authenticated role     | None         | `{items: ProviderSummary[]}` (`id`, `name`, `type`)                        | `UNAUTHENTICATED`; audit read        |
-| `GET /providers/:id/staff` | DOCTOR, COORDINATOR, ADMIN | None         | `{items: ProviderStaffDto[]}` containing only `id`, `name`, and `role`   | `NOT_FOUND`, `FORBIDDEN`; audit read |
+| `GET /providers`           | Any authenticated role     | cursor query | cursor page of `ProviderSummary` with `id`, `name`, and `type`             | `UNAUTHENTICATED`; audit read        |
+| `GET /providers/:id/staff` | DOCTOR, COORDINATOR, ADMIN | cursor query | cursor page of `ProviderStaffDto` containing only `id`, `name`, and `role` | `NOT_FOUND`, `FORBIDDEN`; audit read |
 
 ## Cases
 
