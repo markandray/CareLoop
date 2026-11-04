@@ -5,6 +5,7 @@ import { record } from '../../core/audit';
 import { appendEvent } from '../../core/eventLog';
 import { withTransaction } from '../../core/withTransaction';
 import { AppError } from '../../middleware/error/errorHandler';
+import { raiseEscalation } from '../escalation/raiseEscalation';
 
 export interface ConsentDependencies { prisma: PrismaClient; clock: Clock }
 
@@ -67,6 +68,32 @@ export async function revokeConsent(deps: ConsentDependencies, userId: string, c
     const consent = await tx.consent.update({ where: { id: consentId }, data: { revokedAt: now } });
     await appendConsentCaseEvents(tx, patient.id, CaseEventType.CONSENT_REVOKED, userId, consent.id, now, deps.clock);
     await record(tx, { actorType: ActorType.USER, actorId: userId, action: 'CONSENT_REVOKED', entityType: 'Consent', entityId: consent.id }, deps.clock);
+
+    const affected = await tx.screeningCase.findMany({
+      where: {
+        patientId: patient.id,
+        state: { in: [CaseState.REFERRAL_PENDING, CaseState.REFERRAL_ACCEPTED, CaseState.APPOINTMENT_SCHEDULED] },
+      },
+      select: {
+        id: true,
+        referrals: {
+          where: { status: { not: 'SUPERSEDED' } },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: { toProviderId: true },
+        },
+      },
+    });
+    for (const item of affected) {
+      if (item.referrals[0]?.toProviderId === existing.providerId) {
+        await raiseEscalation(tx, {
+          caseId: item.id,
+          level: 'LEVEL_1',
+          now,
+          reason: 'Cross-provider sharing consent was withdrawn while a referral was active.',
+        }, deps.clock);
+      }
+    }
 
     return toDto(consent);
   });
