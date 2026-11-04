@@ -35,7 +35,8 @@ import { hashExplanationInput } from '../explanation/provider';
 import { CaseState } from '@prisma/client';
 import { caseVisibility } from './caseVisibility';
 import { TemplateExplanationProvider } from '../explanation/provider';
-import { generateValidatedExplanation } from '../explanation/validator';
+import { generateValidatedExplanation, isSafePatientDoctorNote } from '../explanation/validator';
+import { nextSteps, resultCategories } from '../explanation/catalog';
 
 export function createCaseRouter(
   prisma: PrismaClient,
@@ -101,6 +102,8 @@ export function createCaseRouter(
         if (!row) throw AppError.notFound('Case not found.');
         if (row.state !== CaseState.NEW) throw new AppError(409, 'INVALID_TRANSITION', 'Review drafts can only be changed while the case is NEW.');
         await tx.screeningCase.update({ where: { id: row.id }, data: {
+          reviewDraftSummary: resultCategories[fields.resultCategoryCode].EN,
+          reviewDraftNextStep: nextSteps[fields.nextStepCode].EN,
           reviewDraftResultCategoryCode: fields.resultCategoryCode,
           reviewDraftNextStepCode: fields.nextStepCode,
           reviewDraftUrgencyLabel: fields.urgencyLabel,
@@ -127,7 +130,7 @@ export function createCaseRouter(
           nextStepCode: row.reviewDraftNextStepCode,
           urgencyLabel: row.reviewDraftUrgencyLabel,
           route: row.reviewRoute,
-          ...(row.reviewDraftDoctorNote ? { doctorNote: row.reviewDraftDoctorNote } : {}),
+          ...(row.reviewDraftDoctorNote !== null ? { doctorNote: row.reviewDraftDoctorNote } : {}),
         });
         if (!fields.success) throw new AppError(422, 'EVIDENCE_MISSING', 'A complete review draft is required.');
         const inputHash = hashExplanationInput(fields.data);
@@ -144,7 +147,7 @@ export function createCaseRouter(
         }
         return tx.explanationDraft.findMany({ where: { caseId, inputHash, language: { in: ['EN', 'AR'] } }, orderBy: { language: 'asc' } });
       });
-      res.status(200).json({ explanations: result.map((item) => ({ id: item.id, language: item.language, text: item.text, source: item.source, status: item.status, approvedBy: item.approvedBy, approvedAt: item.approvedAt?.toISOString() ?? null, updatedAt: item.updatedAt.toISOString(), inputHash: item.inputHash, current: true, reviewNotice: item.language === 'AR' ? 'UNREVIEWED_TRANSLATION' : 'NONE', doctorNoteSection: null })) });
+      res.status(200).json({ explanations: result.map((item) => explanationResponse(item, true, true)) });
     } catch (error) { next(error); }
   });
 
@@ -302,7 +305,7 @@ function draftFields(row: { reviewDraftResultCategoryCode: string | null; review
     nextStepCode: row.reviewDraftNextStepCode,
     urgencyLabel: row.reviewDraftUrgencyLabel,
     route: row.reviewRoute,
-    ...(row.reviewDraftDoctorNote ? { doctorNote: row.reviewDraftDoctorNote } : {}),
+    ...(row.reviewDraftDoctorNote !== null ? { doctorNote: row.reviewDraftDoctorNote } : {}),
   });
   return result.success ? result.data : null;
 }
@@ -326,7 +329,7 @@ function explanationResponse(item: { id: string; language: 'EN' | 'AR' | 'OTHER'
     inputHash: item.inputHash,
     current,
     reviewNotice: item.language === 'AR' ? 'UNREVIEWED_TRANSLATION' : 'NONE',
-    doctorNoteSection: doctor && doctorNote ? { label: 'Not translated' as const, text: doctorNote } : null,
+    doctorNoteSection: doctorNote && isSafePatientDoctorNote(doctorNote) ? { label: 'Not translated' as const, text: doctorNote } : null,
     ...(doctor ? { stale: !current } : {}),
   };
 }

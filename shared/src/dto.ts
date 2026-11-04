@@ -217,6 +217,7 @@ export const ExplanationDtoSchema = StrictObject({
   updatedAt: UtcTimestampSchema,
   inputHash: z.string().regex(/^[a-f0-9]{64}$/),
   current: z.boolean(),
+  stale: z.boolean().optional(),
   reviewNotice: z.enum(['NONE', 'UNREVIEWED_TRANSLATION']),
   doctorNoteSection: z.object({ label: z.literal('Not translated'), text: z.string() }).strict().nullable(),
 });

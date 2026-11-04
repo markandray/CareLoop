@@ -9,6 +9,10 @@ export type ExplanationValidation = { valid: true } | { valid: false; reasonCode
 // Terms here are specific diagnoses and medicines; the generic required phrase "not a diagnosis" is catalog text.
 const denylist = /\b(?:cancer|tumou?r|carcinoma|diabetes|hypertension|asthma|stroke|infection|aspirin|ibuprofen|paracetamol|acetaminophen|insulin|metformin|mg|dose|dosage|tablet|capsule)\b|سرطان|ورم|سكري|داء السكري|ضغط الدم|ربو|سكتة|عدوى|أسبرين|إيبوبروفين|باراسيتامول|إنسولين|ميتفورمين|جرعة|دواء/u;
 
+export function isSafePatientDoctorNote(note: string): boolean {
+  return !/\p{N}/u.test(note) && !denylist.test(note);
+}
+
 export function validateExplanation(output: ExplanationOutput, fields: ReviewDraftFields): ExplanationValidation {
   if (output.inputHash !== new TemplateExplanationProvider().generate(fields, output.language).inputHash) {
     return { valid: false, reasonCode: 'INVALID_INPUT_HASH' };

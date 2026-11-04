@@ -256,7 +256,7 @@ function currentDraftFields(row: CaseRecord) {
     nextStepCode: row.reviewDraftNextStepCode,
     urgencyLabel: row.reviewDraftUrgencyLabel,
     route: row.reviewRoute,
-    ...(row.reviewDraftDoctorNote ? { doctorNote: row.reviewDraftDoctorNote } : {}),
+    ...(row.reviewDraftDoctorNote !== null ? { doctorNote: row.reviewDraftDoctorNote } : {}),
   });
   return parsed.success ? parsed.data : null;
 }

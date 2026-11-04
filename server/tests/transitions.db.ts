@@ -27,6 +27,7 @@ import { evaluateTransition } from '../src/core/stateMachine/evaluateTransition'
 import { transitionTable } from '../src/core/stateMachine/transitionTable';
 import { loadFacts } from '../src/modules/cases/transitionFacts';
 import type { CaseActor } from '../src/modules/cases/caseVisibility';
+import { hashExplanationInput } from '../src/modules/explanation/provider';
 
 const prisma = new PrismaClient();
 const now = new Date('2026-11-04T10:00:00.000Z');
@@ -895,6 +896,9 @@ async function makeCase(
       recommendedNextStep: state === 'NEW' ? null : 'Follow-up next step',
       reviewDraftSummary: withDraft ? 'Draft approved summary' : null,
       reviewDraftNextStep: withDraft ? 'Draft next step' : null,
+      reviewDraftResultCategoryCode: withDraft ? 'FOLLOW_UP_NEEDED' : null,
+      reviewDraftNextStepCode: withDraft ? 'SPECIALIST_REFERRAL' : null,
+      reviewDraftDoctorNote: null,
       reviewDraftUrgencyLabel: withDraft ? 'ROUTINE' : null,
       reviewRoute: route,
       intakeUrgency: 'ROUTINE',
@@ -912,6 +916,8 @@ async function makeCase(
 }
 
 async function approvedExplanations(caseId: string): Promise<[string, string]> {
+  const caseRow = await prisma.screeningCase.findUniqueOrThrow({ where: { id: caseId } });
+  const fields = { resultCategoryCode: caseRow.reviewDraftResultCategoryCode!, nextStepCode: caseRow.reviewDraftNextStepCode!, urgencyLabel: caseRow.reviewDraftUrgencyLabel!, route: caseRow.reviewRoute as 'REFERRAL' | 'CONFIRMATION' };
   const common = {
     caseId,
     text: 'Approved patient explanation',
@@ -921,6 +927,7 @@ async function approvedExplanations(caseId: string): Promise<[string, string]> {
     approvedAt: now,
     createdAt: now,
     updatedAt: now,
+    inputHash: hashExplanationInput(fields),
   } as const;
   const en = await prisma.explanationDraft.create({ data: { ...common, language: 'EN' } });
   const ar = await prisma.explanationDraft.create({

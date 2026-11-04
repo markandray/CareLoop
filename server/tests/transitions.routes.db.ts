@@ -21,6 +21,7 @@ import type { Clock } from '../src/core/clock';
 import { appendEvent } from '../src/core/eventLog';
 import { AUTH_COOKIE_NAME } from '../src/middleware/auth/authMiddleware';
 import { createApp } from '../src/app';
+import { hashExplanationInput } from '../src/modules/explanation/provider';
 
 const prisma = new PrismaClient();
 const now = new Date('2026-11-04T12:00:00.000Z');
@@ -457,6 +458,9 @@ async function makeCase(
       recommendedNextStep: state === 'NEW' ? null : 'Synthetic next step',
       reviewDraftSummary: options.route ? 'Saved synthetic review draft' : null,
       reviewDraftNextStep: options.route ? 'Saved synthetic next step' : null,
+      reviewDraftResultCategoryCode: options.route ? 'FOLLOW_UP_NEEDED' : null,
+      reviewDraftNextStepCode: options.route ? (options.route === 'CONFIRMATION' ? 'CONFIRMATORY_TEST' : 'SPECIALIST_REFERRAL') : null,
+      reviewDraftDoctorNote: null,
       reviewDraftUrgencyLabel: options.route ? 'ROUTINE' : null,
       reviewRoute: options.route ?? null,
       intakeUrgency: 'ROUTINE',
@@ -474,6 +478,8 @@ async function makeCase(
 }
 
 async function approvedExplanations(caseId: string): Promise<[string, string]> {
+  const caseRow = await prisma.screeningCase.findUniqueOrThrow({ where: { id: caseId } });
+  const fields = { resultCategoryCode: caseRow.reviewDraftResultCategoryCode!, nextStepCode: caseRow.reviewDraftNextStepCode!, urgencyLabel: caseRow.reviewDraftUrgencyLabel!, route: caseRow.reviewRoute as 'REFERRAL' | 'CONFIRMATION' };
   const common = {
     caseId,
     text: 'Approved synthetic patient explanation.',
@@ -483,6 +489,7 @@ async function approvedExplanations(caseId: string): Promise<[string, string]> {
     approvedAt: now,
     createdAt: now,
     updatedAt: now,
+    inputHash: hashExplanationInput(fields),
   } as const;
   const en = await prisma.explanationDraft.create({ data: { ...common, language: 'EN' } });
   const ar = await prisma.explanationDraft.create({
