@@ -17,6 +17,7 @@ import { createCaseRouter } from './modules/cases/caseRoutes';
 import { createConsentRouter } from './modules/consent/consentRoutes';
 import { createProviderRouter } from './modules/providers/providerRoutes';
 import { createReferralRouter } from './modules/referrals/referralRoutes';
+import { createAppointmentRouter } from './modules/referrals/appointmentRoutes';
 import { createNotificationRouter } from './modules/notifications/notificationRoutes';
 
 export interface AppContext {
@@ -69,6 +70,7 @@ export function createApp(
   apiV1Router.use('/patients', createConsentRouter(prisma, clock, authenticate));
   apiV1Router.use('/providers', createProviderRouter(prisma, clock, authenticate));
   apiV1Router.use('/referrals', createReferralRouter(prisma, clock, authenticate));
+  apiV1Router.use('/appointments', createAppointmentRouter(prisma, clock, authenticate));
   apiV1Router.use('/notifications', createNotificationRouter(prisma, clock, authenticate));
 
   // Development/test-only routes for verifying requireRole matrix and auth behaviors

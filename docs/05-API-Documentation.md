@@ -122,7 +122,7 @@ Accept and reassign use the lifecycle transition endpoint and `ACCEPT_REFERRAL` 
 | Method and path                     | Roles                                         | Request                   | Response                        | Errors / event or audit                                                                     |
 | ----------------------------------- | --------------------------------------------- | ------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------- |
 | `GET /referrals/:id/appointments`   | PATIENT own, DOCTOR/COORDINATOR scoped, ADMIN | cursor query              | cursor page of `AppointmentDto` | `NOT_FOUND`, `FORBIDDEN`, `CONSENT_REQUIRED`; audit read                                    |
-| `POST /appointments/:id/attendance` | COORDINATOR of receiving provider             | `RecordAttendanceRequest` | `AppointmentDto` and event      | `NOT_FOUND`, `FORBIDDEN`, `CONFLICT`; `APPOINTMENT_ATTENDED` or `APPOINTMENT_MISSED`, audit |
+| `POST /appointments/:id/attendance` | COORDINATOR of receiving provider             | `{status:"ATTENDED"}` or `{status:"MISSED",delayReason,note?}` | `{appointment,event}` | `NOT_FOUND`, `FORBIDDEN`, `CONFLICT`, `DELAY_REASON_REQUIRED`; scheduled row only; case remains `APPOINTMENT_SCHEDULED`, dueAt becomes now + 24 h routine / 4 h urgent; `APPOINTMENT_ATTENDED` or `APPOINTMENT_MISSED`, plus `DELAY_REASON_RECORDED` for MISSED; audit |
 
 ## Follow-ups
 

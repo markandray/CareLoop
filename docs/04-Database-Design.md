@@ -51,7 +51,7 @@ A case owner is one user **or** one role/provider queue. Both may be absent for 
 - **CaseEvent** — append-only lifecycle and in-state events, with optional state endpoints, actor type and user actor ID, timestamp, and structured payload. System events use `actorType = SYSTEM`; user events require a user actor ID.
 - **Evidence** — structured supporting records for transitions and closure decisions, attributed to the user who recorded them.
 - **Referral** — a provider-to-provider handoff with nullable `reason` and `respondedAt` recording when the receiving provider accepts or rejects it. Reassignment creates a new row; the former row can be retained as `SUPERSEDED` with any rejection reason intact.
-- **Appointment** — scheduled, attended, missed, or rescheduled appointment attached to a referral. It stores nullable `location` and `delayReason` for appointment details and corrective-action context.
+- **Appointment** — scheduled, attended, missed, or rescheduled appointment attached to a referral. It stores nullable `location`, `attendedAt`, and `delayReason` for appointment details, the attendance time, and corrective-action context. The additive attendance migration adds `attendedAt` without changing prior records.
 - **ContactAttempt** — outreach channel and outcome tied to a case milestone and, when applicable, its referral or appointment. This makes failed attempts queryable for the current milestone.
 - **FollowUp** — an owned action and due date during care. Its status is `OPEN`, `COMPLETED`, or `CANCELLED`.
 - **Consult** — patient-to-clinician or clinician-to-clinician question, response, participants, and status.

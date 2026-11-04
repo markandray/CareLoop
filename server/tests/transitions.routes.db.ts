@@ -391,6 +391,43 @@ describe('T-105b transition HTTP routes', () => {
     assert.equal((await api('COORDINATOR_RECEIVING', 'POST', `/referrals/${referral.id}/reject`, { rejectionReason: 'Again' })).status, 409);
   });
 
+  test('T-202a ATTENDED records timestamp, event, audit and 24 hour recovery deadline without starting care', async () => {
+    const { item, appointment } = await scheduledAppointmentForAttendance();
+    const response = await api('COORDINATOR_RECEIVING', 'POST', `/appointments/${appointment.id}/attendance`, { status: 'ATTENDED' });
+    assert.equal(response.status, 200);
+    const updated = await prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
+    const currentCase = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+    assert.equal(updated.status, 'ATTENDED');
+    assert.equal(updated.attendedAt?.toISOString(), now.toISOString());
+    assert.equal(currentCase.state, 'APPOINTMENT_SCHEDULED');
+    assert.equal(currentCase.dueAt?.toISOString(), new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString());
+    assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: 'APPOINTMENT_ATTENDED' } }));
+    assert.ok(await prisma.auditLog.findFirst({ where: { entityType: 'Appointment', entityId: appointment.id, action: 'APPOINTMENT_ATTENDED' } }));
+  });
+
+  test('T-202a MISSED records reason events and urgent four hour recovery deadline', async () => {
+    const { item, appointment } = await scheduledAppointmentForAttendance('URGENT');
+    const response = await api('COORDINATOR_RECEIVING', 'POST', `/appointments/${appointment.id}/attendance`, { status: 'MISSED', delayReason: 'PATIENT_UNREACHABLE', note: 'Synthetic contact note.' });
+    assert.equal(response.status, 200);
+    const updated = await prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
+    const currentCase = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+    assert.equal(updated.status, 'MISSED');
+    assert.equal(updated.delayReason, 'PATIENT_UNREACHABLE');
+    assert.equal(currentCase.dueAt?.toISOString(), new Date(now.getTime() + 4 * 60 * 60 * 1000).toISOString());
+    assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: 'APPOINTMENT_MISSED' } }));
+    assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: 'DELAY_REASON_RECORDED' } }));
+  });
+
+  test('T-202a MISSED without delayReason returns 422 DELAY_REASON_REQUIRED', async () => {
+    const { appointment } = await scheduledAppointmentForAttendance();
+    await assertError(await api('COORDINATOR_RECEIVING', 'POST', `/appointments/${appointment.id}/attendance`, { status: 'MISSED' }), 422, 'DELAY_REASON_REQUIRED');
+  });
+
+  test('T-202a attendance is denied to origin coordinator', async () => {
+    const { appointment } = await scheduledAppointmentForAttendance();
+    await assertError(await api('COORDINATOR_ORIGIN', 'POST', `/appointments/${appointment.id}/attendance`, { status: 'ATTENDED' }), 403, 'FORBIDDEN');
+  });
+
   test('route returns every transition error status and code', async () => {
     const unauthenticatedCase = await makeCase('NEW');
     const noAuth = await transition(undefined, unauthenticatedCase.id, validReviewBody());
@@ -683,6 +720,14 @@ async function makeCase(
     },
   });
   return row;
+}
+
+async function scheduledAppointmentForAttendance(urgency: 'ROUTINE' | 'URGENT' = 'ROUTINE') {
+  const item = await makeCase('REFERRAL_PENDING');
+  await prisma.screeningCase.update({ where: { id: item.id }, data: { state: 'APPOINTMENT_SCHEDULED', urgencyLabel: urgency } });
+  const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'ACCEPTED', respondedAt: now } });
+  const appointment = await prisma.appointment.create({ data: { referralId: referral.id, scheduledAt: new Date(now.getTime() + 86_400_000), status: 'SCHEDULED' } });
+  return { item, appointment };
 }
 
 async function approvedExplanations(caseId: string): Promise<[string, string]> {

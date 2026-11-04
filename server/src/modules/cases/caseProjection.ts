@@ -399,6 +399,7 @@ function appointmentSummary(
     id: appointment.id,
     scheduledAt: appointment.scheduledAt.toISOString(),
     status: appointment.status,
+    attendedAt: iso(appointment.attendedAt),
     location: appointment.location,
     delayReason: appointment.delayReason,
     updatedAt: appointment.updatedAt.toISOString(),

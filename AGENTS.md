@@ -340,6 +340,7 @@ docs/
 | 51 | Generated explanation output always declares `clinicallyReviewed: false`; Arabic also carries an explicit not-clinically-reviewed translation note. Notification DTOs continue to omit that boolean. | Avoids claiming clinical review before a clinician approves the draft while making the Arabic translation limitation visible |
 | 52 | Persisted explanation rows carry the canonical structured-input SHA-256 hash; current approvals are those matching the case's present structured draft | Retains stale drafts as history while making draft edits invalidate approvals without mutating prior explanation rows |
 | 53 | Explanation history is indexed, not unique, by `(caseId, language, createdAt)` | Multiple generations must remain append-only even when the injected clock gives successive drafts the same timestamp |
+| 54 | After a coordinator records attendance, the case stays `APPOINTMENT_SCHEDULED` with a recovery window of 24 h routine / 4 h urgent; `Appointment.attendedAt` records the timestamp | Attendance is an operational fact; the receiving doctor remains responsible for the separate `START_CARE` transition |
 
 ## 16. Resolved decisions
 

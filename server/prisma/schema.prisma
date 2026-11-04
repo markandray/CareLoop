@@ -391,6 +391,7 @@ model Appointment {
   referralId  String            @db.Uuid
   scheduledAt DateTime          @db.Timestamptz(3)
   status      AppointmentStatus @default(SCHEDULED)
+  attendedAt  DateTime?          @db.Timestamptz(3)
   location    String?           @db.Text
   delayReason DelayReason?
   createdAt   DateTime          @default(now()) @db.Timestamptz(3)
