@@ -105,7 +105,7 @@ Every transition request includes `expectedState`; a mismatch returns `409 CONFL
 | `POST /cases/:id/closure-proposals`     | DOCTOR, COORDINATOR | `ClosureProposalRequest` (`closureReason,rationale,evidenceIds`)                                                               | `{event}`                                              | `NOT_FOUND`, `FORBIDDEN`, `EVIDENCE_MISSING`; `CLOSURE_PROPOSED`, audit                                        |
 | `POST /cases/:id/understanding`         | PATIENT (own)       | `ConfirmUnderstandingRequest`                                                                                                  | `{case: CaseDetailPatient,event: CaseEventDtoPatient}` | `NOT_FOUND`, `FORBIDDEN`; `UNDERSTANDING_CONFIRMED`, audit                                                     |
 | `POST /cases/:id/consent-requests`      | DOCTOR or COORDINATOR of origin provider | `ConsentRequestNotificationRequest` (`providerId`) | `NotificationDto` | `NOT_FOUND`, `FORBIDDEN`, `CONFLICT`; queues and automatically sends `consent_needed`, `NOTIFICATION_SENT`, audit |
-| `POST /cases/:id/contact-attempts`      | COORDINATOR         | `ContactAttemptRequest` (`milestoneState`, at most one referralId/appointmentId, channel, outcome, optional notes/delayReason) | `ContactAttemptDto` and event                          | `NOT_FOUND`, `FORBIDDEN`, `VALIDATION_ERROR`; `CONTACT_ATTEMPT_LOGGED`, audit                                  |
+| `POST /cases/:id/contact-attempts`      | COORDINATOR of origin provider, or receiving provider with a live referral and consent | `ContactAttemptRequest` (`channel`, `outcome`, optional notes/delayReason) | `{contactAttempt}` and event                          | `NOT_FOUND`, `FORBIDDEN`, `CONSENT_REQUIRED`, `VALIDATION_ERROR`; `CONTACT_ATTEMPT_LOGGED`, audit; FAILED/NO_ANSWER sends `unreachable_retry`, third failed attempt for the current milestone raises LEVEL_2 |
 
 ## Referrals
 
@@ -136,7 +136,7 @@ Scheduling and rescheduling are lifecycle transitions `SCHEDULE_APPOINTMENT` and
 
 ## Contact attempts
 
-`GET /cases/:id/contact-attempts` (PATIENT own, DOCTOR/COORDINATOR scoped, ADMIN; cursor page of `ContactAttemptDto`) lists attempts, each recording the exact `milestoneState` and optional `referralId` or `appointmentId`. `POST /cases/:id/contact-attempts` is described under Transitions and in-state actions. Failed-attempt rules count only attempts for the current open milestone. Both endpoints audit reads/writes; errors are `NOT_FOUND`, `FORBIDDEN`, `CONSENT_REQUIRED`, and `VALIDATION_ERROR` as applicable.
+`GET /cases/:id/contact-attempts` and `POST /cases/:id/contact-attempts` are restricted to a COORDINATOR at the origin provider or at the receiving provider while a live PENDING/ACCEPTED referral and active consent exist. The strict POST body accepts only `channel`, `outcome`, optional `notes`, and optional `delayReason`; client-supplied `milestoneState`, `referralId`, and `appointmentId` are rejected. The server derives the current case state and latest non-superseded referral or current scheduled/missed appointment. Failed counts use the exact derived `(caseId, milestoneState, referralId, appointmentId)` tuple, so milestones are not combined. FAILED and NO_ANSWER queue and send `unreachable_retry`; the third failed outcome for one tuple raises LEVEL_2. Both endpoints audit writes/reads.
 
 ## Notifications
 

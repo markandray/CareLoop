@@ -526,17 +526,11 @@ export const RejectReferralRequestSchema = StrictObject({
 export type RejectReferralRequest = z.infer<typeof RejectReferralRequestSchema>;
 
 export const ContactAttemptRequestSchema = StrictObject({
-  milestoneState: CaseStateSchema,
-  referralId: UuidSchema.optional(),
-  appointmentId: UuidSchema.optional(),
   channel: ContactChannelSchema,
   outcome: ContactOutcomeSchema,
   delayReason: DelayReasonSchema.optional(),
   notes: z.string().trim().max(2000).optional(),
-}).refine(
-  ({ referralId, appointmentId }) => !(referralId && appointmentId),
-  'Choose at most one referral or appointment milestone.',
-);
+});
 export type ContactAttemptRequest = z.infer<typeof ContactAttemptRequestSchema>;
 
 export const RecordAttendanceRequestSchema = z.discriminatedUnion('status', [

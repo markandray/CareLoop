@@ -309,3 +309,13 @@ curl -i -b coordinator-receiving-cookies.txt -X POST "http://localhost:4000/api/
   -d '{"rejectionReason":"No capacity at this provider"}'
 curl -i -b coordinator-receiving-cookies.txt "http://localhost:4000/api/v1/referrals/$REFERRAL_ID/appointments?limit=25"
 ```
+
+The coordinator contact-attempt API derives the current workflow milestone from the case. Do not
+send referral or appointment IDs; the strict request schema rejects them.
+
+```sh
+curl -i -b coordinator-cookies.txt -X POST "http://localhost:4000/api/v1/cases/$CASE_ID/contact-attempts" \
+  -H 'Content-Type: application/json' \
+  -d '{"channel":"PHONE","outcome":"NO_ANSWER","delayReason":"PATIENT_UNREACHABLE","notes":"Synthetic attempt."}'
+curl -i -b coordinator-cookies.txt "http://localhost:4000/api/v1/cases/$CASE_ID/contact-attempts?limit=25"
+```
