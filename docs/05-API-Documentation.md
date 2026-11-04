@@ -165,6 +165,8 @@ Dispatch is only manually available for `result_reviewed`; all other configured 
 
 Consent rows are immutable grants: revocation sets `revokedAt`, and a later grant creates a new row. A provider/scope pair may have only one active grant. Revocation also raises LEVEL_1 operational escalation on active referral, accepted-referral, or scheduled-appointment cases whose current referral targets that provider, unless a higher escalation is already present.
 
+Receiving-provider case reads, referral packets, and lifecycle transitions all use the same current-referral plus active-consent check. Revocation removes those permissions immediately; a subsequent new grant restores them while that provider remains the current referral destination.
+
 ## Explanation
 
 | Method and path                                       | Roles                                                                 | Request                     | Response                        | Errors / event or audit                                             |
