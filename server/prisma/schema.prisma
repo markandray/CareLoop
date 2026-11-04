@@ -289,6 +289,7 @@ model ScreeningCase {
   reviewDraftResultCategoryCode String?    @db.VarChar(80)
   reviewDraftNextStepCode  String?         @db.VarChar(80)
   reviewDraftUrgencyLabel  Urgency?
+  reviewDraftDoctorNote    String?         @db.Text
   reviewRoute              String?         @db.VarChar(16)
   intakeUrgency            Urgency
   urgencyLabel             Urgency?
@@ -489,6 +490,7 @@ model ExplanationDraft {
   caseId     String            @db.VarChar(16)
   language   Language
   text       String            @db.Text
+  inputHash  String            @default("0000000000000000000000000000000000000000000000000000000000000000") @db.VarChar(64)
   source     ExplanationSource @default(TEMPLATE)
   status     ExplanationStatus @default(DRAFT)
   approvedBy String?           @db.Uuid

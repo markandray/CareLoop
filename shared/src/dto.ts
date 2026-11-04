@@ -132,10 +132,12 @@ export const CreatePatientResponseSchema = StrictObject({
 export type CreatePatientResponse = z.infer<typeof CreatePatientResponseSchema>;
 
 export const ReviewDraftDtoSchema = StrictObject({
-  resultSummary: z.string(),
-  recommendedNextStep: z.string(),
+  resultCategoryCode: z.string(),
+  nextStepCode: z.string(),
   urgencyLabel: UrgencySchema,
   route: z.enum(['CONFIRMATION', 'REFERRAL']),
+  doctorNote: z.string().nullable(),
+  inputHash: z.string().regex(/^[a-f0-9]{64}$/),
   updatedAt: UtcTimestampSchema,
 });
 export type ReviewDraftDto = z.infer<typeof ReviewDraftDtoSchema>;
@@ -213,6 +215,10 @@ export const ExplanationDtoSchema = StrictObject({
   approvedBy: UuidSchema.nullable(),
   approvedAt: UtcTimestampSchema.nullable(),
   updatedAt: UtcTimestampSchema,
+  inputHash: z.string().regex(/^[a-f0-9]{64}$/),
+  current: z.boolean(),
+  reviewNotice: z.enum(['NONE', 'UNREVIEWED_TRANSLATION']),
+  doctorNoteSection: z.object({ label: z.literal('Not translated'), text: z.string() }).strict().nullable(),
 });
 export type ExplanationDto = z.infer<typeof ExplanationDtoSchema>;
 
@@ -577,12 +583,7 @@ export type ConfirmatoryResultRequest = z.infer<
   typeof ConfirmatoryResultRequestSchema
 >;
 
-export const ReviewDraftRequestSchema = StrictObject({
-  resultSummary: z.string().trim().min(1).max(4000),
-  recommendedNextStep: z.string().trim().min(1).max(2000),
-  urgencyLabel: UrgencySchema,
-  route: z.enum(['CONFIRMATION', 'REFERRAL']),
-});
+export const ReviewDraftRequestSchema = ReviewDraftFieldsSchema;
 export type ReviewDraftRequest = z.infer<typeof ReviewDraftRequestSchema>;
 
 export const GenerateExplanationsRequestSchema = StrictObject({});

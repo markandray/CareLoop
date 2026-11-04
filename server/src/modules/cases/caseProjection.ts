@@ -416,6 +416,12 @@ function explanationDto(
     approvedBy: explanation.approvedBy,
     approvedAt: iso(explanation.approvedAt),
     updatedAt: explanation.updatedAt.toISOString(),
+    inputHash: explanation.inputHash,
+    current: true,
+    reviewNotice: explanation.language === 'AR' ? 'UNREVIEWED_TRANSLATION' : 'NONE',
+    doctorNoteSection: explanation.language === 'AR' && explanation.text
+      ? { label: 'Not translated', text: explanation.text }
+      : null,
   };
 }
 

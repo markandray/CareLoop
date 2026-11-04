@@ -13,6 +13,7 @@ import {
   TransitionRequestSchema,
   ConfirmUnderstandingRequestSchema,
   ConsentRequestNotificationRequestSchema,
+  ReviewDraftRequestSchema,
   type TransitionRequest,
 } from '@careloop/shared';
 import type { Clock } from '../../core/clock';
@@ -28,6 +29,9 @@ import { record } from '../../core/audit';
 import { AppError } from '../../middleware/error/errorHandler';
 import { queueNotification } from '../notifications/notificationService';
 import { toNotificationDto } from '../notifications/notificationRoutes';
+import { hashExplanationInput } from '../explanation/provider';
+import { CaseState } from '@prisma/client';
+import { caseVisibility } from './caseVisibility';
 
 export function createCaseRouter(
   prisma: PrismaClient,
@@ -83,6 +87,29 @@ export function createCaseRouter(
       }
     },
   );
+
+  router.put('/:id/review-draft', requireRole('DOCTOR'), validateBody(ReviewDraftRequestSchema), async (req, res, next) => {
+    try {
+      const now = clock.now();
+      const fields = ReviewDraftRequestSchema.parse(req.body);
+      const result = await withTransaction(prisma, async (tx) => {
+        const row = await tx.screeningCase.findFirst({ where: { AND: [{ id: caseIdParam(req), originProviderId: req.user!.providerId ?? '00000000-0000-0000-0000-000000000000' }, caseVisibility(toCaseActor(req), now)] } });
+        if (!row) throw AppError.notFound('Case not found.');
+        if (row.state !== CaseState.NEW) throw new AppError(409, 'INVALID_TRANSITION', 'Review drafts can only be changed while the case is NEW.');
+        await tx.screeningCase.update({ where: { id: row.id }, data: {
+          reviewDraftResultCategoryCode: fields.resultCategoryCode,
+          reviewDraftNextStepCode: fields.nextStepCode,
+          reviewDraftUrgencyLabel: fields.urgencyLabel,
+          reviewRoute: fields.route,
+          reviewDraftDoctorNote: fields.doctorNote ?? null,
+          updatedAt: now,
+        } });
+        await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'REVIEW_DRAFT_SAVED', entityType: 'ScreeningCase', entityId: row.id }, clock);
+        return { ...fields, inputHash: hashExplanationInput(fields), updatedAt: now.toISOString() };
+      });
+      res.status(200).json({ reviewDraft: result });
+    } catch (error) { next(error); }
+  });
 
   router.post('/:id/understanding', requireRole('PATIENT'), validateBody(ConfirmUnderstandingRequestSchema), async (req, res, next) => {
     try {
