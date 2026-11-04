@@ -94,6 +94,29 @@ rm cookies.txt
 the role-specific case DTO and its `CASE_CREATED` event. A doctor from another
 origin provider receives `404 NOT_FOUND` when reading the case.
 
+## Consent and provider directory curl examples
+
+After logging in as the synthetic patient, the patient can list current and prior consent rows, grant referral-sharing consent, and revoke a grant. A grant is retained as a separate row after revocation; duplicate active grants and repeated revocation return `409 CONFLICT`.
+
+```sh
+# Set PROVIDER_ID to the receiving provider ID from the provider directory.
+curl -i -b patient-cookies.txt http://localhost:4000/api/v1/providers
+curl -i -b patient-cookies.txt http://localhost:4000/api/v1/patients/me/consents
+curl -i -b patient-cookies.txt http://localhost:4000/api/v1/patients/me/consents \
+  -H 'Content-Type: application/json' \
+  -d "{\"providerId\":\"$PROVIDER_ID\",\"scope\":\"CROSS_PROVIDER_REFERRAL\"}"
+
+# Copy consent.id from the grant response.
+CONSENT_ID='replace-with-consent-id'
+curl -i -b patient-cookies.txt -X POST \
+  "http://localhost:4000/api/v1/patients/me/consents/$CONSENT_ID/revoke"
+
+# Staff can see a directory with names and roles only; email/password fields are not returned.
+curl -i -b staff-cookies.txt "http://localhost:4000/api/v1/providers/$PROVIDER_ID/staff"
+```
+
+Revocation immediately removes receiving-provider access to the current referral packet, case reads, and lifecycle transitions. A new consent grant restores that access. Revoking consent for an active referral raises a human-facing LEVEL_1 operational escalation.
+
 ## Transition curl examples
 
 The transition endpoint uses the expected current state and a strict, key-specific

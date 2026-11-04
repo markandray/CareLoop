@@ -113,10 +113,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: `modules/attention` with configurable rules returning reasons + suggested operational action; `attentionLevel` on case queries; periodic job writes escalation events and sets `escalationLevel`.
 - Accept: each rule has a unit test; reasons are plain-language; response includes the label "operational workflow rule, not a clinical risk assessment".
 
-### [ ] T-206 Consent and cross-provider access
+### [x] T-206 Consent and cross-provider access
 - Agent: Codex. Depends: T-104
 - Output: consent create/revoke; cross-provider case access requires active consent; consent changes audited.
 - Accept: access denied after revocation (test); audit entries present.
+- Evidence (2026-11-04): immutable grant/revoke rows, patient-only consent routes, open-case consent timeline events, audit entries, cursor list, provider directory/staff routes, reusable escalation writer, and `/referrals/:id/packet` were implemented. Receiving-provider case reads, packets, and transitions return 404 immediately after revocation and work again after a new grant. HTTP DB test also covers duplicate grant/double revoke conflicts, cross-patient 404, non-patient 403, closed-case event exclusion, escalation targeting/higher-level preservation, and staff PII redaction. Baseline before new tests: 74/74; after: 75/75. `npm run lint`, `npm run build`, `npm test` (113/113), and `npm run test:db` (75/75) pass.
 
 ---
 
