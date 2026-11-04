@@ -1,6 +1,8 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import {
   CaseEventType,
+  ActorType,
+  ConsentScope,
   type PrismaClient,
 } from '@prisma/client';
 import {
@@ -9,6 +11,8 @@ import {
   CaseListQuerySchema,
   CursorQuerySchema,
   TransitionRequestSchema,
+  ConfirmUnderstandingRequestSchema,
+  ConsentRequestNotificationRequestSchema,
   type TransitionRequest,
 } from '@careloop/shared';
 import type { Clock } from '../../core/clock';
@@ -18,6 +22,12 @@ import { projectStaffCaseEvent } from './caseProjection';
 import { createCase, getCase, listCaseEvents, listCases } from './caseService';
 import { executeTransition } from './transitionService';
 import type { CaseActor } from './caseVisibility';
+import { withTransaction } from '../../core/withTransaction';
+import { appendEvent } from '../../core/eventLog';
+import { record } from '../../core/audit';
+import { AppError } from '../../middleware/error/errorHandler';
+import { queueNotification } from '../notifications/notificationService';
+import { toNotificationDto } from '../notifications/notificationRoutes';
 
 export function createCaseRouter(
   prisma: PrismaClient,
@@ -73,6 +83,45 @@ export function createCaseRouter(
       }
     },
   );
+
+  router.post('/:id/understanding', requireRole('PATIENT'), validateBody(ConfirmUnderstandingRequestSchema), async (req, res, next) => {
+    try {
+      const caseId = caseIdParam(req);
+      const result = await withTransaction(prisma, async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "ScreeningCase" WHERE "id" = ${caseId} FOR UPDATE`;
+        const caseRecord = await tx.screeningCase.findFirst({ where: { id: caseId, patient: { is: { userId: req.user!.id } } }, select: { id: true, state: true, understandingConfirmedAt: true } });
+        if (!caseRecord) throw AppError.notFound('Case not found.');
+        const explanation = await tx.explanationDraft.findFirst({ where: { id: req.body.explanationId, caseId, status: 'APPROVED' }, select: { id: true } });
+        if (!explanation) throw AppError.validation('An approved explanation for this case is required.');
+        if (caseRecord.understandingConfirmedAt) throw AppError.conflict('Understanding has already been confirmed.');
+        const now = clock.now();
+        await tx.screeningCase.update({ where: { id: caseId }, data: { understandingConfirmedAt: now } });
+        const event = await appendEvent(tx, { caseId, type: CaseEventType.UNDERSTANDING_CONFIRMED, actorType: ActorType.USER, actorId: req.user!.id, payload: { explanationId: explanation.id } }, clock);
+        await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'UNDERSTANDING_CONFIRMED', entityType: 'ScreeningCase', entityId: caseId }, clock);
+        return { case: { id: caseRecord.id, state: caseRecord.state, understandingConfirmedAt: now.toISOString() }, event: { id: event.id, type: event.type, createdAt: event.createdAt.toISOString() } };
+      });
+      res.status(200).json(result);
+    } catch (error) { next(error); }
+  });
+
+  router.post('/:id/consent-requests', requireRole('DOCTOR', 'COORDINATOR'), validateBody(ConsentRequestNotificationRequestSchema), async (req, res, next) => {
+    try {
+      const caseId = caseIdParam(req);
+      const notification = await withTransaction(prisma, async (tx) => {
+        const caseRecord = await tx.screeningCase.findFirst({ where: { id: caseId, originProviderId: req.user!.providerId ?? '00000000-0000-0000-0000-000000000000' }, select: { id: true, patientId: true } });
+        if (!caseRecord) throw AppError.notFound('Case not found.');
+        const provider = await tx.provider.findUnique({ where: { id: req.body.providerId }, select: { id: true } });
+        if (!provider) throw AppError.notFound('Provider not found.');
+        if (await tx.consent.findFirst({ where: { patientId: caseRecord.patientId, providerId: provider.id, scope: ConsentScope.CROSS_PROVIDER_REFERRAL, OR: [{ revokedAt: null }, { revokedAt: { gt: clock.now() } }] }, select: { id: true } })) {
+          throw AppError.conflict('Active consent already exists for this provider.');
+        }
+        const created = await queueNotification(tx, clock, { caseId, templateKey: 'consent_needed', actor: { actorType: ActorType.USER, actorId: req.user!.id } });
+        await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'CONSENT_REQUESTED', entityType: 'Notification', entityId: created.id }, clock);
+        return created;
+      });
+      res.status(201).json(toNotificationDto(notification));
+    } catch (error) { next(error); }
+  });
 
   router.get(
     '/',
