@@ -101,7 +101,7 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 #### [x] T-202a Referral rejection, attendance, contact attempts
 - Agent: Codex. Branch: `task/T-202a-workflow-actions`.
 - Output: receiving-provider reject action and paged referral/appointment reads; coordinator attendance action; server-derived contact-attempt milestones with retry notification and LEVEL_2 threshold.
-- Evidence (2026-11-04): `npm run lint` and root `npm run build` pass; `npm test` reports 124/124; `npm run test:db` reports 141/141 pass, 0 fail. Added migration `20261104050000_appointment_attended_at`, named scenario tests, curl examples, and docs 02/04/05/07 updates. Commits: `c76bd28`, `df8c336`, `339b81d`, `20c4895`, `d1ff5ea`; see AGENTS.md Progress log.
+- Evidence (2026-11-04): `npm run lint` and root `npm run build` pass; `npm test` reports 124/124; `npm run test:db` reports 141/141 pass, 0 fail. Added migration `20261104050000_appointment_attended_at`, named scenario tests, curl examples, and docs 02/04/05/07 updates. Commits: `c76bd28`, `df8c336`, `339b81d`, `20c4895`, `d1ff5ea`, `b6f5d14`; see AGENTS.md Progress log.
 
 ### [x] T-203 Notifications outbox and acknowledgement
 - Agent: Codex. Depends: T-105
