@@ -5,6 +5,7 @@ import {
   type ClosureReason,
   type Language,
 } from '@prisma/client';
+import { isSafePatientDoctorNote } from '../explanation/validator';
 import {
   CaseDetailAdminSchema,
   CaseDetailCoordinatorSchema,
@@ -407,10 +408,22 @@ function appointmentSummary(
 function explanationDto(
   explanation: CaseProjectionRecord['explanations'][number],
 ) {
+  let text = explanation.text;
+  let doctorNote: string | null = null;
+  try {
+    const parsed = JSON.parse(explanation.text) as { sections?: { doctorNote?: unknown } };
+    if (typeof parsed.sections?.doctorNote === 'string') {
+      doctorNote = parsed.sections.doctorNote;
+      delete parsed.sections.doctorNote;
+      text = JSON.stringify(parsed);
+    }
+  } catch {
+    // Historical rows may contain plain text rather than serialized template output.
+  }
   return {
     id: explanation.id,
     language: explanation.language,
-    text: explanation.text,
+    text,
     source: explanation.source,
     status: explanation.status,
     approvedBy: explanation.approvedBy,
@@ -419,8 +432,8 @@ function explanationDto(
     inputHash: explanation.inputHash,
     current: true,
     reviewNotice: explanation.language === 'AR' ? 'UNREVIEWED_TRANSLATION' : 'NONE',
-    doctorNoteSection: explanation.language === 'AR' && explanation.text
-      ? { label: 'Not translated', text: explanation.text }
+    doctorNoteSection: doctorNote && isSafePatientDoctorNote(doctorNote)
+      ? { label: 'Not translated', text: doctorNote }
       : null,
   };
 }

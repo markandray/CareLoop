@@ -398,6 +398,49 @@ test('patient projection never includes a DRAFT explanation', async () => {
   assert.equal(JSON.stringify(dto).includes('DRAFT ONLY SECRET'), false);
 });
 
+test('patient case detail separates a safe clinician note from explanation text', async () => {
+  const createdAt = new Date(fixedTime.getTime() + 3000);
+  await prisma.explanationDraft.create({ data: {
+    caseId: patientACaseA,
+    language: 'EN',
+    text: JSON.stringify({ language: 'EN', sections: { resultMeaning: 'Safe explanation.', doctorNote: 'Please discuss the next step.' }, disclaimer: 'General information.' }),
+    source: ExplanationSource.TEMPLATE,
+    status: ExplanationStatus.APPROVED,
+    approvedBy: doctorAId,
+    approvedAt: createdAt,
+    createdAt,
+    updatedAt: createdAt,
+  } });
+  const row = await prisma.screeningCase.findUniqueOrThrow({ where: { id: patientACaseA }, include: caseDetailInclude });
+  const { projectCaseForActor } = await import('../src/modules/cases/caseProjection');
+  const dto = projectCaseForActor(row, actor(patientAUserId, 'PATIENT', null));
+  assert.ok(dto.approvedExplanation);
+  assert.equal(dto.approvedExplanation.text.includes('Please discuss the next step.'), false);
+  assert.equal(dto.approvedExplanation.doctorNoteSection?.label, 'Not translated');
+  assert.equal(dto.approvedExplanation.doctorNoteSection?.text, 'Please discuss the next step.');
+});
+
+test('patient case detail suppresses clinician notes containing digits or denylist terms', async () => {
+  const createdAt = new Date(fixedTime.getTime() + 4000);
+  await prisma.explanationDraft.create({ data: {
+    caseId: patientACaseA,
+    language: 'EN',
+    text: JSON.stringify({ language: 'EN', sections: { resultMeaning: 'Safe.', doctorNote: 'Call 2 about aspirin.' }, disclaimer: 'Safe.' }),
+    source: ExplanationSource.TEMPLATE,
+    status: ExplanationStatus.APPROVED,
+    approvedBy: doctorAId,
+    approvedAt: createdAt,
+    createdAt,
+    updatedAt: createdAt,
+  } });
+  const row = await prisma.screeningCase.findUniqueOrThrow({ where: { id: patientACaseA }, include: caseDetailInclude });
+  const { projectCaseForActor } = await import('../src/modules/cases/caseProjection');
+  const dto = projectCaseForActor(row, actor(patientAUserId, 'PATIENT', null));
+  assert.ok(dto.approvedExplanation);
+  assert.equal(dto.approvedExplanation.text.includes('Call 2 about aspirin.'), false);
+  assert.equal(dto.approvedExplanation.doctorNoteSection, null);
+});
+
 async function createUser(role: Role, name: string, providerId: string | null) {
   return prisma.user.create({
     data: {
