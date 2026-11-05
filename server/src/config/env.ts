@@ -20,6 +20,8 @@ export const EnvSchema = z.object({
     .string()
     .min(8, 'DEMO_PASSWORD must be at least 8 characters long.')
     .default('CareLoopDemo2026!'),
+  ESCALATION_SWEEP_INTERVAL_MS: z.coerce.number().int().nonnegative().optional(),
+  DEMO_CONTROLS_ENABLED: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
