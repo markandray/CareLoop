@@ -61,6 +61,8 @@ A case owner is one user **or** one role/provider queue. Both may be absent for 
 - **AuditLog** — append-only record of actor type, optional user actor ID, action, entity type/id, and time for security and administrative auditing. `SYSTEM` identifies automation; `USER` requires an actor ID.
 - **SystemSetting** — keyed JSON configuration with update time and optional user attribution. The demo clock offset is stored here so it survives a server restart; the same table backs admin configuration reads and writes.
 
+Escalation history is not stored in a mutable child table: each increase and clear is represented by an immutable `CaseEvent` row, with the corresponding `AuditLog` record. `ScreeningCase.escalationLevel` and `escalatedAt` are the current overlay projection; the sweep updates them only when the required level rises, and resolution clears them in the same transaction as its event and audit rows.
+
 `SystemSetting` is added by the seventh, additive migration. The clock stores its millisecond offset as a JSON number under the stable `demoClockOffsetMs` key; changing or resetting the demo clock updates this row through Prisma.
 
 The eighth additive migration adds the nullable review-draft fields and route to `ScreeningCase`. The route uses a checked `VARCHAR` rather than a Prisma enum so the agreed enums remain unchanged. The three draft values must be either all absent or all present; after `REVIEW_CASE`, the service copies them into approved case fields and clears the draft columns while retaining `reviewRoute`.

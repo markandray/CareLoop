@@ -364,6 +364,21 @@ describe('T-105b transition HTTP routes', () => {
     assert.deepEqual(referrals.map((row) => row.status).sort(), ['PENDING', 'SUPERSEDED']);
   });
 
+  test('third referral reassignment raises LEVEL_2 in the same transaction', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'REJECTED', rejectionReason: 'No capacity', respondedAt: now, reason: 'Initial synthetic referral.', createdAt: now, updatedAt: now } });
+    for (const [index, providerId] of [alternateId, receivingId, alternateId].entries()) {
+      const response = await transition('COORDINATOR_ORIGIN', item.id, { transitionKey: 'REASSIGN_REFERRAL', expectedState: 'REFERRAL_PENDING', evidence: { toProviderId: providerId, referralReason: `Reassignment ${index + 1}.` } });
+      assert.equal(response.status, 200);
+      const current = await prisma.referral.findFirstOrThrow({ where: { caseId: item.id, status: 'PENDING' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+      if (index < 2) await prisma.referral.update({ where: { id: current.id }, data: { status: 'REJECTED', rejectionReason: 'Synthetic rejection.', respondedAt: now } });
+    }
+    const row = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+    assert.equal(row.reassignmentCount, 3);
+    assert.equal(row.escalationLevel, 'LEVEL_2');
+    assert.equal(await prisma.caseEvent.count({ where: { caseId: item.id, type: 'ESCALATION_RAISED' } }), 1);
+  });
+
   test('T-202a receiving coordinator rejection records response and returns ownership to the origin queue', async () => {
     const item = await makeCase('REFERRAL_PENDING');
     const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING', reason: 'Synthetic referral.' } });

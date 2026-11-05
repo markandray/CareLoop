@@ -8,6 +8,7 @@ import { PrismaClient, ProviderType, type Role } from '@prisma/client';
 import type { Clock } from '../src/core/clock';
 import { AUTH_COOKIE_NAME } from '../src/middleware/auth/authMiddleware';
 import { createApp } from '../src/app';
+import { runEscalationSweep } from '../src/modules/escalation/escalationService';
 
 const prisma = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
 const baseNow = new Date('2026-11-05T12:00:00.000Z');
@@ -48,6 +49,172 @@ beforeEach(async () => { await clock.reset(); });
 after(async () => { if (server) await new Promise<void>((resolve) => server.close(() => resolve())); await prisma.$disconnect(); });
 
 describe('T-205a attention HTTP and database behavior', () => {
+  test('sweep raises level one for one millisecond overdue and a second sweep is a no-op', async () => {
+    const item = await makeCase({ providerId: providerA, dueAt: new Date(baseNow.getTime() - 1) });
+    await runEscalationSweep({ prisma, clock });
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } })).escalationLevel, 'LEVEL_1');
+    assert.equal(await runEscalationSweep({ prisma, clock }), 0);
+    assert.equal(await prisma.caseEvent.count({ where: { caseId: item.id, type: 'ESCALATION_RAISED' } }), 1);
+  });
+
+  test('sweep raises level two and three at two and three completed SLA periods', async () => {
+    const levelTwo = await makeCase({ providerId: providerA, dueAt: new Date(baseNow.getTime() - 4 * 24 * 3600000) });
+    const levelThree = await makeCase({ providerId: providerA, dueAt: new Date(baseNow.getTime() - 6 * 24 * 3600000) });
+    await runEscalationSweep({ prisma, clock });
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: levelTwo.id } })).escalationLevel, 'LEVEL_2');
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: levelThree.id } })).escalationLevel, 'LEVEL_3');
+  });
+
+  test('level two escalates after exactly 48 uncleared hours and not before', async () => {
+    const item = await makeCase({ providerId: providerA, dueAt: new Date(baseNow.getTime() + 1) });
+    await prisma.screeningCase.update({ where: { id: item.id }, data: { escalationLevel: 'LEVEL_2', escalatedAt: baseNow } });
+    await clock.advance(47 * 60 + 59, 'minutes');
+    await runEscalationSweep({ prisma, clock });
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } })).escalationLevel, 'LEVEL_2');
+    await clock.advance(1, 'minutes');
+    await runEscalationSweep({ prisma, clock });
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } })).escalationLevel, 'LEVEL_3');
+  });
+
+  test('sweep does not lower escalations and ignores closed and non-overdue cases', async () => {
+    const high = await makeCase({ providerId: providerA, dueAt: new Date(baseNow.getTime() + 86400000) });
+    const closed = await makeCase({ providerId: providerA, state: 'CLOSED', dueAt: new Date(baseNow.getTime() - 1) });
+    await prisma.screeningCase.update({ where: { id: high.id }, data: { escalationLevel: 'LEVEL_3', escalatedAt: baseNow } });
+    await runEscalationSweep({ prisma, clock });
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: high.id } })).escalationLevel, 'LEVEL_3');
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: closed.id } })).escalationLevel, 'LEVEL_0');
+    await prisma.screeningCase.update({ where: { id: closed.id }, data: { state: 'NEW', closureReason: null, closedAt: null, ownerUserId: users.DOCTOR_A.id, dueAt: new Date(baseNow.getTime() + 7 * 86400000) } });
+  });
+
+  test('two concurrent sweeps emit only one escalation event', async () => {
+    const item = await makeCase({ providerId: providerA, dueAt: new Date(baseNow.getTime() - 1) });
+    await Promise.all([runEscalationSweep({ prisma, clock }), runEscalationSweep({ prisma, clock })]);
+    assert.equal(await prisma.caseEvent.count({ where: { caseId: item.id, type: 'ESCALATION_RAISED' } }), 1);
+  });
+
+  test('sweep query count stays constant for ten and fifty open cases', async () => {
+    const measure = async (count: number) => {
+      for (let i = 0; i < count; i += 1) await makeCase({ providerId: providerA });
+      queryCount = 0; captureQueries = true;
+      try { await runEscalationSweep({ prisma, clock }); }
+      finally { captureQueries = false; }
+      return queryCount;
+    };
+    const ten = await measure(10);
+    const fifty = await measure(50);
+    assert.equal(fifty, ten);
+  });
+
+  test('resolve rejects missing action plan and non-escalated cases with named errors', async () => {
+    const item = await makeCase({ providerId: providerA });
+    assert.equal((await api('DOCTOR_A', 'POST', `/cases/${item.id}/escalation/resolve`, {})).status, 400);
+    const result = await api('DOCTOR_A', 'POST', `/cases/${item.id}/escalation/resolve`, { actionPlan: 'Review and assign a follow-up owner.' });
+    assert.equal(result.status, 409);
+  });
+
+  test('overdue escalation resolution requires delay reason, resets dueAt, and clears escalation', async () => {
+    const item = await makeCase({ providerId: providerA, dueAt: new Date(baseNow.getTime() - 1) });
+    await prisma.screeningCase.update({ where: { id: item.id }, data: { escalationLevel: 'LEVEL_1', escalatedAt: baseNow } });
+    const path = `/cases/${item.id}/escalation/resolve`;
+    assert.equal((await api('COORDINATOR_A', 'POST', path, { actionPlan: 'Contact the patient and confirm the next operational step.' })).status, 422);
+    const response = await api('COORDINATOR_A', 'POST', path, { actionPlan: 'Contact the patient and confirm the next operational step.', delayReason: 'PROVIDER_DELAY' });
+    assert.equal(response.status, 200);
+    const row = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+    assert.equal(row.escalationLevel, 'LEVEL_0'); assert.equal(row.escalatedAt, null); assert.ok(row.dueAt!.getTime() > baseNow.getTime());
+    assert.equal(await prisma.caseEvent.count({ where: { caseId: item.id, type: 'ESCALATION_CLEARED' } }), 1);
+    assert.equal(await prisma.caseEvent.count({ where: { caseId: item.id, type: 'DELAY_REASON_RECORDED' } }), 1);
+    await clock.advance(48, 'hours');
+    await runEscalationSweep({ prisma, clock });
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } })).escalationLevel, 'LEVEL_0');
+    await clock.advance(1, 'milliseconds');
+    await runEscalationSweep({ prisma, clock });
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } })).escalationLevel, 'LEVEL_1');
+  });
+
+  test('level two resolution is doctor-only and patient/admin are denied', async () => {
+    const item = await makeCase({ providerId: providerA });
+    await prisma.screeningCase.update({ where: { id: item.id }, data: { escalationLevel: 'LEVEL_2', escalatedAt: baseNow } });
+    const body = { actionPlan: 'Clinician review the operational plan and next owner.' };
+    assert.equal((await api('COORDINATOR_A', 'POST', `/cases/${item.id}/escalation/resolve`, body)).status, 403);
+    assert.equal((await api('PATIENT', 'POST', `/cases/${item.id}/escalation/resolve`, body)).status, 403);
+    assert.equal((await api('ADMIN', 'POST', `/cases/${item.id}/escalation/resolve`, body)).status, 403);
+    assert.equal((await api('DOCTOR_A', 'POST', `/cases/${item.id}/escalation/resolve`, body)).status, 200);
+  });
+
+  test('level one permits a doctor and level three remains doctor-only within scope', async () => {
+    const levelOne = await makeCase({ providerId: providerA });
+    await prisma.screeningCase.update({ where: { id: levelOne.id }, data: { escalationLevel: 'LEVEL_1', escalatedAt: baseNow } });
+    assert.equal((await api('DOCTOR_A', 'POST', `/cases/${levelOne.id}/escalation/resolve`, { actionPlan: 'Review and record the next coordination step.' })).status, 200);
+    const levelThree = await makeCase({ providerId: providerA });
+    await prisma.screeningCase.update({ where: { id: levelThree.id }, data: { escalationLevel: 'LEVEL_3', escalatedAt: baseNow } });
+    const plan = { actionPlan: 'Clinician review and record a safe operational plan.' };
+    assert.equal((await api('COORDINATOR_A', 'POST', `/cases/${levelThree.id}/escalation/resolve`, plan)).status, 403);
+    assert.equal((await api('DOCTOR_B', 'POST', `/cases/${levelThree.id}/escalation/resolve`, plan)).status, 404);
+    assert.equal((await api('DOCTOR_A', 'POST', `/cases/${levelThree.id}/escalation/resolve`, plan)).status, 200);
+  });
+
+  test('owner assignment accepts the state owner role and rejects a wrong-role target', async () => {
+    const item = await makeCase({ providerId: providerA, owner: false });
+    const wrongRole = await api('COORDINATOR_A', 'PUT', `/cases/${item.id}/owner`, { userId: users.COORDINATOR_A.id });
+    assert.equal(wrongRole.status, 400);
+    const wrongProvider = await api('COORDINATOR_A', 'PUT', `/cases/${item.id}/owner`, { userId: users.DOCTOR_B.id });
+    assert.equal(wrongProvider.status, 400);
+    const response = await api('COORDINATOR_A', 'PUT', `/cases/${item.id}/owner`, { userId: users.DOCTOR_A.id });
+    assert.equal(response.status, 200);
+    const row = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+    assert.equal(row.ownerUserId, users.DOCTOR_A.id); assert.equal(row.ownerQueueRole, null); assert.equal(row.ownerQueueProviderId, null);
+  });
+
+  test('receiving coordinator may assign a receiving queue owner to a pending referral', async () => {
+    const item = await makeCase({ providerId: providerA, state: 'REFERRAL_PENDING', referralTo: providerB });
+    await prisma.explanationDraft.create({ data: { caseId: item.id, language: 'EN', text: 'Synthetic approved explanation.', status: 'APPROVED', approvedBy: users.DOCTOR_A.id, approvedAt: baseNow, inputHash: '0'.repeat(64), createdAt: baseNow, updatedAt: baseNow } });
+    await prisma.screeningCase.update({ where: { id: item.id }, data: { ownerUserId: null, ownerQueueRole: 'COORDINATOR', ownerQueueProviderId: providerB } });
+    const response = await api('COORDINATOR_B', 'PUT', `/cases/${item.id}/owner`, { userId: users.COORDINATOR_B.id });
+    assert.equal(response.status, 200);
+    const row = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+    assert.equal(row.ownerUserId, users.COORDINATOR_B.id);
+    assert.equal(row.ownerQueueRole, null);
+    assert.equal(row.ownerQueueProviderId, null);
+  });
+
+  test('admin owner assignment is audited with admin actor and closed assignment conflicts', async () => {
+    const item = await makeCase({ providerId: providerA, owner: false });
+    assert.equal((await api('ADMIN', 'PUT', `/cases/${item.id}/owner`, { userId: users.DOCTOR_A.id })).status, 200);
+    assert.ok(await prisma.auditLog.findFirst({ where: { action: 'OWNER_ASSIGNED', entityId: item.id, actorId: users.ADMIN.id } }));
+    const closed = await makeCase({ providerId: providerA, state: 'CLOSED' });
+    assert.equal((await api('ADMIN', 'PUT', `/cases/${closed.id}/owner`, { userId: users.DOCTOR_A.id })).status, 409);
+  });
+
+  test('demo clock advance is admin-only, capped, audited, and disabled routes return 404', async () => {
+    const beforeAdvance = await clock.now();
+    assert.equal((await api('COORDINATOR_A', 'POST', '/demo/clock/advance', { amount: 1, unit: 'HOURS' })).status, 403);
+    assert.equal((await api('ADMIN', 'POST', '/demo/clock/advance', { amount: 31, unit: 'DAYS' })).status, 400);
+    const response = await api('ADMIN', 'POST', '/demo/clock/advance', { amount: 1, unit: 'HOURS' });
+    assert.equal(response.status, 200);
+    assert.equal((await clock.now()).getTime() - beforeAdvance.getTime(), 3600000);
+    assert.ok(await prisma.auditLog.findFirst({ where: { action: 'DEMO_CLOCK_ADVANCED', actorId: users.ADMIN.id } }));
+    const disabledApp = createApp({ prisma, clock, env: { NODE_ENV: 'test', SERVER_PORT: 0, DATABASE_URL: process.env.DATABASE_URL ?? '', JWT_SECRET: secret, CLIENT_ORIGIN: origin, DEMO_PASSWORD: 'unused-test-password', DEMO_CONTROLS_ENABLED: false } });
+    const disabledServer = http.createServer(disabledApp); await new Promise<void>((resolve) => disabledServer.listen(0, '127.0.0.1', resolve));
+    const disabledBase = `http://127.0.0.1:${(disabledServer.address() as AddressInfo).port}`;
+    const token = jwt.sign({ userId: users.ADMIN.id, role: 'ADMIN' }, secret, { expiresIn: '1h' });
+    const disabled = await fetch(`${disabledBase}/api/v1/demo/clock`, { headers: { Cookie: `${AUTH_COOKIE_NAME}=${token}` } });
+    assert.equal(disabled.status, 404);
+    for (const path of ['/demo/clock/advance', '/demo/clock/reset']) {
+      const disabledResponse = await fetch(`${disabledBase}/api/v1${path}`, { method: 'POST', headers: { Cookie: `${AUTH_COOKIE_NAME}=${token}`, Origin: origin, 'Content-Type': 'application/json' }, body: path.endsWith('advance') ? JSON.stringify({ amount: 1, unit: 'HOURS' }) : '{}' });
+      assert.equal(disabledResponse.status, 404);
+    }
+    await new Promise<void>((resolve) => disabledServer.close(() => resolve()));
+  });
+
+  test('one 48 hour admin clock advance makes an urgent pending referral HIGH and escalated', async () => {
+    const item = await makeCase({ providerId: providerA, urgency: 'URGENT', state: 'REFERRAL_PENDING', dueAt: baseNow, referralTo: providerB });
+    const advanced = await api('ADMIN', 'POST', '/demo/clock/advance', { amount: 48, unit: 'HOURS' });
+    assert.equal(advanced.status, 200);
+    const row = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+    assert.equal(row.escalationLevel, 'LEVEL_2');
+    assert.ok(row.escalatedAt);
+    assert.equal((await getAttention('DOCTOR_A', item.id)).attentionLevel, 'HIGH');
+  });
   test('origin staff, consented receiving staff, and admin see only their permitted scopes', async () => {
     const local = await makeCase({ providerId: providerA });
     const received = await makeCase({ providerId: providerA, referralTo: providerB });
@@ -73,18 +240,33 @@ describe('T-205a attention HTTP and database behavior', () => {
   });
 
   test('attention queue sorts by score and pages with an opaque cursor', async () => {
-    const lower = await makeCase({ providerId: providerA, urgency: 'ROUTINE', owner: false });
-    const higher = await makeCase({ providerId: providerA, urgency: 'URGENT', owner: false });
-    const firstResponse = await api('ADMIN', 'GET', `/attention/cases?providerId=${providerA}&minLevel=MEDIUM&limit=1`);
+    const isolatedProvider = (await makeProvider('sort')).id;
+    const lower = await makeCase({ providerId: isolatedProvider, urgency: 'ROUTINE', owner: false });
+    const higher = await makeCase({ providerId: isolatedProvider, urgency: 'URGENT', owner: false });
+    const firstResponse = await api('ADMIN', 'GET', `/attention/cases?providerId=${isolatedProvider}&minLevel=MEDIUM&limit=1`);
     assert.equal(firstResponse.status, 200);
     const first = await firstResponse.json() as { items: Array<{ caseId: string; score: number }>; nextCursor: string | null };
     assert.ok(first.nextCursor);
     assert.notEqual(first.items[0]?.caseId, lower.id);
-    const nextResponse = await api('ADMIN', 'GET', `/attention/cases?providerId=${providerA}&minLevel=MEDIUM&limit=1&cursor=${encodeURIComponent(first.nextCursor)}`);
+    const nextResponse = await api('ADMIN', 'GET', `/attention/cases?providerId=${isolatedProvider}&minLevel=MEDIUM&limit=1&cursor=${encodeURIComponent(first.nextCursor)}`);
     assert.equal(nextResponse.status, 200);
     const next = await nextResponse.json() as { items: Array<{ caseId: string }> };
     assert.notEqual(first.items[0]?.caseId, next.items[0]?.caseId);
     assert.ok([lower.id, higher.id].includes(first.items[0]!.caseId));
+  });
+
+  test('minimum escalation filter is inclusive and queue DTO exposes escalation timestamp', async () => {
+    const isolatedProvider = (await makeProvider('filter')).id;
+    const lower = await makeCase({ providerId: isolatedProvider, dueAt: new Date(baseNow.getTime() - 1) });
+    const higher = await makeCase({ providerId: isolatedProvider, dueAt: new Date(baseNow.getTime() - 4 * 24 * 3600000) });
+    await runEscalationSweep({ prisma, clock });
+    const response = await api('ADMIN', 'GET', `/attention/cases?minEscalation=LEVEL_2&providerId=${isolatedProvider}&limit=100`);
+    assert.equal(response.status, 200);
+    const rows = (await response.json() as { items: Array<{ caseId: string; escalationLevel: string; escalatedAt: string | null }> }).items;
+    assert.ok(!rows.some((row) => row.caseId === lower.id));
+    const row = rows.find((item) => item.caseId === higher.id);
+    assert.equal(row?.escalationLevel, 'LEVEL_2');
+    assert.ok(row?.escalatedAt);
   });
 
   test('new unassigned case scores thirty and urgent adds twenty', async () => {

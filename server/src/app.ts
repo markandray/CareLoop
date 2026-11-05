@@ -21,6 +21,7 @@ import { createReferralRouter } from './modules/referrals/referralRoutes';
 import { createAppointmentRouter } from './modules/referrals/appointmentRoutes';
 import { createNotificationRouter } from './modules/notifications/notificationRoutes';
 import { createAttentionRouter } from './modules/attention/attentionRoutes';
+import { createEscalationRouter } from './modules/escalation/escalationRoutes';
 
 export interface AppContext {
   prisma: PrismaClient;
@@ -71,6 +72,7 @@ export function createApp(
   apiV1Router.use('/cases', createCaseRouter(prisma, clock, authenticate));
   // Mount staff attention reads before the coordinator-only case contact router.
   apiV1Router.use('/', createAttentionRouter(prisma, clock, authenticate));
+  apiV1Router.use('/', createEscalationRouter(prisma, clock, env, authenticate));
   apiV1Router.use('/cases', createContactAttemptRouter(prisma, clock, authenticate));
   apiV1Router.use('/patients', createConsentRouter(prisma, clock, authenticate));
   apiV1Router.use('/providers', createProviderRouter(prisma, clock, authenticate));

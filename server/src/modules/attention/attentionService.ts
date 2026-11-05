@@ -13,6 +13,7 @@ type Db = Prisma.TransactionClient;
 type CaseRow = Prisma.ScreeningCaseGetPayload<{ include: { ownerUser: true } }>;
 type Cursor = { score: number; dueAt: string | null; id: string };
 const levels = { LOW: 0, MEDIUM: 1, HIGH: 2 } as const;
+const escalationLevels = { LEVEL_0: 0, LEVEL_1: 1, LEVEL_2: 2, LEVEL_3: 3 } as const;
 
 /** Loads all operational facts with a fixed set of grouped/bulk queries. */
 export async function loadAttentionSnapshots(db: Db, rows: CaseRow[], now: Date): Promise<Map<string, AttentionSnapshot>> {
@@ -82,6 +83,7 @@ export async function listAttention(deps: { prisma: PrismaClient; clock: Clock }
     const snapshots = await loadAttentionSnapshots(tx, rows, now);
     const items = rows.map((row) => ({ row, result: computeAttention(snapshots.get(row.id)!, now, workflowConfig) }))
       .filter(({ result }) => !parsed.minLevel || levels[result.attentionLevel] >= levels[parsed.minLevel])
+      .filter(({ row }) => !parsed.minEscalation || escalationLevels[row.escalationLevel] >= escalationLevels[parsed.minEscalation])
       .sort((a, b) => b.result.score - a.result.score || compareNullableDate(a.row.dueAt, b.row.dueAt) || a.row.id.localeCompare(b.row.id));
     const afterCursor = cursor ? items.filter(({ row, result }) => comparePosition({ score: result.score, dueAt: row.dueAt?.toISOString() ?? null, id: row.id }, cursor) > 0) : items;
     const hasMore = afterCursor.length > parsed.limit;
@@ -89,7 +91,7 @@ export async function listAttention(deps: { prisma: PrismaClient; clock: Clock }
     const last = selected.at(-1);
     await record(tx, { actorType: ActorType.USER, actorId: actor.userId, action: 'ATTENTION_LIST_READ', entityType: 'ScreeningCase', entityId: actor.userId }, deps.clock);
     return AttentionQueuePageSchema.parse({
-      items: selected.map(({ row, result }) => ({ caseId: row.id, state: row.state, dueAt: row.dueAt?.toISOString() ?? null, ...result })),
+      items: selected.map(({ row, result }) => ({ caseId: row.id, state: row.state, dueAt: row.dueAt?.toISOString() ?? null, escalationLevel: row.escalationLevel, escalatedAt: row.escalatedAt?.toISOString() ?? null, ...result })),
       nextCursor: hasMore && last ? encodeCursor({ score: last.result.score, dueAt: last.row.dueAt?.toISOString() ?? null, id: last.row.id }) : null,
       updatedAt: now.toISOString(),
     });

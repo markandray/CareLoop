@@ -1,7 +1,5 @@
-import { ActorType, Prisma, type EscalationLevel, type PrismaClient } from '@prisma/client';
+import { type CaseState, type EscalationLevel, type PrismaClient } from '@prisma/client';
 import type { Clock } from '../../core/clock';
-import { record } from '../../core/audit';
-import { withTransaction } from '../../core/withTransaction';
 import { workflowConfig } from '../../config/workflowConfig';
 import { loadAttentionSnapshots } from '../attention/attentionService';
 import { overdueInfo, type AttentionSnapshot } from '../attention/attentionEngine';
@@ -24,13 +22,14 @@ export interface EscalationSweepDependencies { prisma: PrismaClient; clock: Cloc
 
 /** One bounded query set for all open cases. Returns null when another sweep holds the lock. */
 export async function runEscalationSweep(deps: EscalationSweepDependencies): Promise<number | null> {
-  return withTransaction(deps.prisma, async (tx) => {
+  return deps.prisma.$transaction(async (tx) => {
     const lock = await tx.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(${SWEEP_LOCK_KEY}) AS locked`;
     if (!lock[0]?.locked) return null;
     const now = deps.clock.now();
+    await tx.$queryRaw`SELECT "id" FROM "ScreeningCase" WHERE "state" <> 'CLOSED' FOR UPDATE`;
     const rows = await tx.screeningCase.findMany({ where: { state: { not: 'CLOSED' } }, include: { ownerUser: true } });
     const snapshots = await loadAttentionSnapshots(tx, rows, now);
-    let raised = 0;
+    const candidates: Array<{ caseId: string; level: EscalationLevel; reason: string; now: Date; state: CaseState }> = [];
     for (const row of rows) {
       const snapshot = snapshots.get(row.id)!;
       snapshot.escalationLevel = row.escalationLevel;
@@ -40,11 +39,8 @@ export async function runEscalationSweep(deps: EscalationSweepDependencies): Pro
       const reason = required === 'LEVEL_3' && row.escalationLevel === 'LEVEL_2' && overdueInfo(snapshot, now).slaPeriods < workflowConfig.thresholds.level3OverduePeriods
         ? 'LEVEL_2_UNCLEARED_48_HOURS'
         : `OVERDUE_SLA_PERIODS_${required.slice(-1)}`;
-      if (await raiseEscalation(tx, { caseId: row.id, level: required, reason, now }, deps.clock)) {
-        await record(tx, { actorType: ActorType.SYSTEM, action: 'ESCALATION_RAISED', entityType: 'ScreeningCase', entityId: row.id }, deps.clock);
-        raised += 1;
-      }
+      candidates.push({ caseId: row.id, level: required, reason, now, state: row.state });
     }
-    return raised;
-  });
+    return (await raiseEscalation(tx, candidates, deps.clock)).length;
+  }, { timeout: 60_000 });
 }

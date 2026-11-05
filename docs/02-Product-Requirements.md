@@ -297,12 +297,14 @@ Escalation is an **operational overlay** on top of the case; it flags the case i
 | Escalation level | Deterministic trigger condition | Routed recipient queue | How cleared |
 |---|---|---|---|
 | `LEVEL_0` | Default state; all operational SLAs met. | None | N/A |
-| `LEVEL_1` | Any operational SLA breach (`overdue > 0`) **OR** patient revokes consent during an active referral. | COORDINATOR queue | Corrective action logged (reassignment, reschedule, outreach) and `dueAt` reset, or case resolved. |
-| `LEVEL_2` | Overdue >= 2 full SLA periods (`floor(overdue / SLA) >= 2`) **OR** 3 failed contact attempts **OR** 3 referral reassignments. | DOCTOR queue and COORDINATOR queue | Explicit clinician and coordinator review record and documented action plan. |
-| `LEVEL_3` | Overdue >= 3 full SLA periods (`floor(overdue / SLA) >= 3`) **OR** LEVEL_2 escalation remaining uncleared for >= 48 hours. | DOCTOR queue (including the originating doctor) plus an ADMIN notification | Clinician sign-off, direct clinical intervention, formal case reassignment, or audited closure. |
+| `LEVEL_1` | Any operational SLA breach (`overdue > 0`) **OR** patient revokes consent during an active referral. | COORDINATOR queue | A scoped DOCTOR or COORDINATOR records a 10–500 character action plan; if overdue, a delay reason is required. The current-state `dueAt` window resets. |
+| `LEVEL_2` | Overdue >= 2 full SLA periods (`floor(overdue / SLA) >= 2`) **OR** 3 failed contact attempts **OR** 3 referral reassignments. | DOCTOR queue and COORDINATOR queue | A scoped DOCTOR records the action plan; if overdue, a delay reason is required. |
+| `LEVEL_3` | Overdue >= 3 full SLA periods (`floor(overdue / SLA) >= 3`) **OR** LEVEL_2 escalation remaining uncleared for >= 48 hours. | DOCTOR queue (including the originating doctor) plus an ADMIN notification | A scoped DOCTOR records the action plan; if overdue, a delay reason is required. |
 
 **Strict Admin Escalation Constraint**:
-An ADMIN **cannot resolve escalations**. Escalation resolution requires clinical or coordinator operational ownership. An ADMIN may **only assign a case owner to a stuck or unassigned case** (`ownerUserId` assignment), and this action is strictly logged in the immutable audit trail.
+An ADMIN **cannot resolve escalations**. COORDINATORs may clear LEVEL_1 only; DOCTORs may clear any level. An ADMIN may assign an owner to an open case under the provider and state-role rules, and this action is strictly logged in the immutable audit trail.
+
+The periodic sweep uses the same state-SLA overdue calculation as the attention engine, holds a PostgreSQL transaction advisory lock, and only raises levels. `escalatedAt` records when the current level was reached. Three failed contacts, the third referral reassignment, and consent revocation raise their levels in their triggering transactions; the periodic sweep does not evaluate those event triggers. Clearing an escalation records the action plan and starts a new due window for the case's current state and urgency.
 
 ---
 
@@ -313,7 +315,7 @@ An ADMIN **cannot resolve escalations**. Escalation resolution requires clinical
 - **PATIENT**: Authenticated individual viewing their personal screening journey. Sees only their own records; confirms understanding; grants/revokes consent; may decline care or submit consult queries.
 - **DOCTOR**: Licensed clinical provider. Confirms urgency; approves result explanations; orders confirmations; creates and reviews referrals; signs off closures (or closes directly in one step); answers consults; receives LEVEL_2 and LEVEL_3 cases in the DOCTOR queue, with LEVEL_3 also routed to the originating doctor.
 - **COORDINATOR**: Healthcare operations coordinator. Manages patient queues; dispatches queued notifications; handles referral routing and reassignments; books appointments; logs attendance/misses and contact attempts; proposes closures; receives LEVEL_1 cases and shares the LEVEL_2 queue with DOCTORs.
-- **ADMIN**: System administrator. System configuration, demo clock management, seed data, and operational KPI oversight. Read-only on clinical content. May assign case owners to unassigned cases (audited); cannot execute clinical actions or resolve escalations. Receives an ADMIN notification for LEVEL_3 escalation.
+- **ADMIN**: System administrator. System configuration, demo clock management, seed data, and operational KPI oversight. Read-only on clinical content. May assign an owner to an open case (audited) under provider and state-role rules; cannot execute clinical actions or resolve escalations. Receives an ADMIN notification for LEVEL_3 escalation.
 
 ### 6.2 Action x role permission matrix
 

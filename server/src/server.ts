@@ -19,7 +19,7 @@ async function startServer(): Promise<void> {
       if (intervalMs > 0) {
         setInterval(() => {
           void runEscalationSweep({ prisma: prisma!, clock }).then((raised) => {
-            if (raised !== null && raised > 0) console.log(`Escalation sweep completed: ${raised} raised.`);
+            console.log(`Escalation sweep completed: ${raised ?? 0} raised${raised === null ? ' (another sweep holds the lock)' : ''}.`);
           }).catch((error: unknown) => {
             const message = error instanceof Error ? error.message.replace(/[\r\n]+/g, ' ') : 'unknown error';
             console.error(`Escalation sweep failed: ${message}`);

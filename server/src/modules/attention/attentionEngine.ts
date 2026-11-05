@@ -43,6 +43,7 @@ const specificStateRules: Partial<Record<CaseState, boolean>> = {
 
 /** Shared definition of state-SLA lateness for both attention and escalation. */
 export function overdueInfo(snapshot: Pick<AttentionSnapshot, 'state' | 'urgency' | 'dueAt'>, now: Date, config: Config = workflowConfig): { overdueBy: number; slaPeriods: number } {
+  if (snapshot.state === 'CLOSED') return { overdueBy: 0, slaPeriods: 0 };
   const overdueBy = snapshot.dueAt ? Math.max(0, now.getTime() - snapshot.dueAt.getTime()) : 0;
   const slaKey = stateSlaKey[snapshot.state];
   const slaDuration = slaKey ? config.slaMs[slaKey][snapshot.urgency] : 0;

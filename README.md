@@ -331,3 +331,41 @@ curl -i -b coordinator-cookies.txt 'http://localhost:4000/api/v1/cases?attention
 
 The queue accepts `providerId` to filter by origin provider and an opaque `cursor` from the prior page.
 Patients receive 403. The response label is `Operational workflow rule, not a clinical risk assessment.`
+
+### Demonstrate an overdue escalation and resolve it
+
+This creates an urgent, unassigned synthetic case, advances the admin demo clock past its four-hour
+review window, shows the escalated queue item, and resolves it with an operational action plan and
+delay reason. Use the `PATIENT_ID` and `PROVIDER_ID` values from the setup above; copy the returned
+case ID into `CASE_ID`.
+
+```sh
+curl -i -c doctor-cookies.txt http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"doctor.screening@careloop.local\",\"password\":\"$DEMO_PASSWORD\"}"
+
+curl -i -b doctor-cookies.txt http://localhost:4000/api/v1/cases \
+  -H 'Content-Type: application/json' \
+  -d "{\"transitionKey\":\"CREATE_CASE\",\"evidence\":{\"patientId\":\"$PATIENT_ID\",\"originProviderId\":\"$PROVIDER_ID\",\"pathway\":\"Synthetic screening\",\"screeningType\":\"Synthetic screen\",\"resultCategory\":\"Synthetic finding\",\"preliminarySummary\":\"Synthetic intake summary.\",\"recommendedAction\":\"Clinician review required.\",\"intakeUrgency\":\"URGENT\"}}"
+
+CASE_ID='replace-with-case-id-from-response'
+curl -i -c admin-cookies.txt http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"admin@careloop.local\",\"password\":\"$DEMO_PASSWORD\"}"
+curl -i -b admin-cookies.txt -X POST http://localhost:4000/api/v1/demo/clock/advance \
+  -H 'Content-Type: application/json' -d '{"amount":5,"unit":"HOURS"}'
+curl -i -b admin-cookies.txt \
+  "http://localhost:4000/api/v1/attention/cases?providerId=$PROVIDER_ID&minEscalation=LEVEL_1&limit=25"
+
+curl -i -c coordinator-cookies.txt http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"coordinator.screening@careloop.local\",\"password\":\"$DEMO_PASSWORD\"}"
+curl -i -b coordinator-cookies.txt -X POST \
+  "http://localhost:4000/api/v1/cases/$CASE_ID/escalation/resolve" \
+  -H 'Content-Type: application/json' \
+  -d '{"actionPlan":"Assign the case to the doctor and confirm the next workflow step.","delayReason":"PROVIDER_DELAY"}'
+```
+
+Resolution clears the overlay, records an immutable event and audit row, and starts a fresh SLA
+window for the current case state. Only a doctor may resolve LEVEL_2 or LEVEL_3; the admin can
+advance the demo clock but cannot resolve cases.

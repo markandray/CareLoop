@@ -177,7 +177,8 @@ export type ExplanationOutput = z.infer<typeof ExplanationOutputSchema>;
 
 export const DemoClockDtoSchema = StrictObject({
   now: UtcTimestampSchema,
-  updatedAt: UtcTimestampSchema,
+  offsetMs: z.number().int(),
+  isSimulated: z.boolean(),
 });
 export type DemoClockDto = z.infer<typeof DemoClockDtoSchema>;
 
@@ -354,6 +355,7 @@ export const CaseListItemSchema = StrictObject({
   owner: CaseOwnerSchema,
   dueAt: UtcTimestampSchema.nullable(),
   escalationLevel: EscalationLevelSchema,
+  escalatedAt: UtcTimestampSchema.nullable(),
   createdAt: UtcTimestampSchema,
   updatedAt: UtcTimestampSchema,
   attention: z.object({ level: z.enum(['LOW', 'MEDIUM', 'HIGH']), score: z.number().int().nonnegative() }).strict().optional(),
@@ -513,14 +515,7 @@ export type CaseTransitionResponse = z.infer<
   typeof CaseTransitionResponseSchema
 >;
 
-export const AssignOwnerRequestSchema = z.discriminatedUnion('kind', [
-  StrictObject({ kind: z.literal('USER'), ownerUserId: UuidSchema }),
-  StrictObject({
-    kind: z.literal('QUEUE'),
-    ownerQueueRole: RoleSchema,
-    ownerQueueProviderId: UuidSchema,
-  }),
-]);
+export const AssignOwnerRequestSchema = StrictObject({ userId: UuidSchema });
 export type AssignOwnerRequest = z.infer<typeof AssignOwnerRequestSchema>;
 
 export const RejectReferralRequestSchema = StrictObject({
@@ -638,15 +633,7 @@ export type ClosureProposalRequest = z.infer<
 >;
 
 export const ResolveEscalationRequestSchema = StrictObject({
-  action: z.enum([
-    'REASSIGNED',
-    'RESCHEDULED',
-    'OUTREACH_COMPLETED',
-    'CLINICAL_REVIEWED',
-    'ACTION_PLAN_RECORDED',
-    'CASE_RESOLVED',
-  ]),
-  resolutionDetails: NoteSchema,
+  actionPlan: z.string().trim().min(10).max(500),
   delayReason: DelayReasonSchema.optional(),
 });
 export type ResolveEscalationRequest = z.infer<
@@ -706,6 +693,7 @@ export type AttentionResponse = z.infer<typeof AttentionResponseSchema>;
 
 export const AttentionListQuerySchema = CursorQuerySchema.extend({
   minLevel: AttentionLevelSchema.optional(),
+  minEscalation: EscalationLevelSchema.exclude(['LEVEL_0']).optional(),
   providerId: UuidSchema.optional(),
 }).strict();
 export type AttentionListQuery = z.infer<typeof AttentionListQuerySchema>;
@@ -713,6 +701,8 @@ export const AttentionQueueItemSchema = StrictObject({
   caseId: CaseIdSchema,
   state: CaseStateSchema,
   dueAt: UtcTimestampSchema.nullable(),
+  escalationLevel: EscalationLevelSchema,
+  escalatedAt: UtcTimestampSchema.nullable(),
   ...AttentionResponseSchema.omit({ caseId: true, updatedAt: true }).shape,
 });
 export const AttentionQueuePageSchema = makeCursorPageSchema(AttentionQueueItemSchema);

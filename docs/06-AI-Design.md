@@ -10,6 +10,14 @@ Scores below 30 are LOW, 30 through 59 are MEDIUM, and 60 or more are HIGH. Reas
 
 Worked example from Product Requirements §5.4: an urgent case in `REFERRAL_PENDING` has a 24 h SLA, a 25 point pending-referral rule, and the 20 point urgent-tier bonus. At 1 h overdue its overdue bonus is 0 and the total is 45 (MEDIUM). At 24 h overdue it is 55 (MEDIUM). At 48 h it is 65 (HIGH). At 96 h the overdue bonus is capped at 40 and the total is 85 (HIGH). The weights and SLA durations are illustrative operational configuration, not clinical standards.
 
+## Escalation sweep
+
+The escalation sweep uses the same pure `overdueInfo(snapshot, now, workflowConfig)` calculation as attention, so both features agree on overdue milliseconds and full SLA periods. The level policy preserves the stored level, raises L1 after the first overdue instant, L2 at two complete periods, and L3 at three periods or when a stored L2 has remained uncleared for at least 48 hours. Closed cases map to L0. These thresholds are operational demonstration settings, not clinical standards.
+
+`runEscalationSweep` obtains a PostgreSQL transaction advisory lock, loads open case snapshots in batches, and appends one system `ESCALATION_RAISED` event plus an audit row for each increase. It never lowers levels; unchanged facts produce no additional writes. A server interval (60 seconds by default, disabled with `ESCALATION_SWEEP_INTERVAL_MS=0`) invokes it using the injected clock. Failed contacts, referral reassignments, and consent revocations are handled at their triggering event transaction and are not recalculated by the sweep. Level 2 is triggered on the third reassignment.
+
+Resolution is an audited human action. A scoped coordinator or doctor can clear L1; only a doctor can clear L2/L3. The action plan is retained in the append-only event payload. If currently overdue, a delay reason is mandatory. The service resets the due date from the current state and urgency and clears `escalatedAt`; no case state transition is made.
+
 ## Deterministic explanation catalog
 
 Patient-facing explanations use a small, version-controlled bilingual catalog. Stable result-category and next-step codes select short English or Arabic sentences; fixed catalog text supplies the meaning, clinic-contact, limitation, and disclaimer sections. This keeps wording reviewable, predictable, and usable without a network service or API key. Catalog text is deliberately generic and does not name diseases, medicines, doses, or numeric thresholds. Arabic output is marked `clinicallyReviewed: false` and carries a visible note that it has not been clinically reviewed.

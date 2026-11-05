@@ -265,6 +265,7 @@ export function projectCaseListItem(row: CaseListProjectionRecord, attention?: {
         : { kind: 'UNASSIGNED' },
     dueAt: iso(row.dueAt),
     escalationLevel: row.escalationLevel,
+    escalatedAt: iso(row.escalatedAt),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     ...(attention ? { attention } : {}),
