@@ -116,10 +116,15 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: patient->clinician and clinician->clinician consult request, response, status; visible on case timeline.
 - Accept: only permitted roles can create/answer; events written.
 
-### [ ] T-205 Attention rules engine and escalation job
+### [x] T-205 Attention rules engine and escalation job
 - Agent: Codex. Depends: T-201, T-202, T-203
 - Output: `modules/attention` with configurable rules returning reasons + suggested operational action; `attentionLevel` on case queries; periodic job writes escalation events and sets `escalationLevel`.
 - Accept: each rule has a unit test; reasons are plain-language; response includes the label "operational workflow rule, not a clinical risk assessment".
+
+#### [x] T-205b Escalation sweep, resolution, owner assignment, and demo clock
+- Agent: Codex. Branch: `task/T-205b-escalation`.
+- Output: shared overdue policy; advisory-locked periodic escalation sweep; third-referral-reassignment trigger; staff resolution and owner assignment APIs; admin simulated-clock controls; contracts, config, docs, and repeatable test evidence.
+- Evidence (2026-11-05): `npm run lint`, root `npm run build`, `npm test` (149/149), and clean `careloop_test` `npm run test:db` (175/175, 0 failures) pass. Live Compose curl verified the demo journey from case creation through an overdue HIGH/LEVEL_1 queue item and coordinator resolution. See `docs/07-Testing-and-Validation.md`.
 
 #### [x] T-205a Read-time attention engine and API
 - Agent: Codex. Branch: `task/T-205a-attention`.
