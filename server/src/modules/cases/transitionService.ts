@@ -34,6 +34,8 @@ import { loadFacts } from './transitionFacts';
 import { queueNotification } from '../notifications/notificationService';
 import { nextSteps, resultCategories } from '../explanation/catalog';
 import { loadAttentionSnapshots, summarizeAttention } from '../attention/attentionService';
+import { raiseEscalation } from '../escalation/raiseEscalation';
+import { workflowConfig } from '../../config/workflowConfig';
 
 export interface TransitionServiceDependencies {
   prisma: PrismaClient;
@@ -144,6 +146,10 @@ export async function executeTransition(
         : {}),
     };
     await tx.screeningCase.update({ where: { id: caseId }, data: updateData });
+    if (transition.transitionKey === 'REASSIGN_REFERRAL' && caseRecord.reassignmentCount + 1 === workflowConfig.thresholds.referralReassignments) {
+      const raised = await raiseEscalation(tx, { caseId, level: 'LEVEL_2', reason: 'THREE_REFERRAL_REASSIGNMENTS', now }, deps.clock);
+      if (raised) await record(tx, { actorType: ActorType.USER, actorId: actor.userId, action: 'ESCALATION_RAISED', entityType: 'ScreeningCase', entityId: caseId }, deps.clock);
+    }
 
     await storeTransitionEvidence(
       tx,

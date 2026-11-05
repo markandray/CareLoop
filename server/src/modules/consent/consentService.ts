@@ -86,12 +86,13 @@ export async function revokeConsent(deps: ConsentDependencies, userId: string, c
     });
     for (const item of affected) {
       if (item.referrals[0]?.toProviderId === existing.providerId) {
-        await raiseEscalation(tx, {
+        const raised = await raiseEscalation(tx, {
           caseId: item.id,
           level: 'LEVEL_1',
           now,
           reason: 'Cross-provider sharing consent was withdrawn while a referral was active.',
         }, deps.clock);
+        if (raised) await record(tx, { actorType: ActorType.USER, actorId: userId, action: 'ESCALATION_RAISED', entityType: 'ScreeningCase', entityId: item.id }, deps.clock);
       }
     }
 
