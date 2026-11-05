@@ -16,6 +16,7 @@ export interface AttentionSnapshot {
   failedContactAttempts: number;
   openConsultAgeMs: number | null;
   escalationLevel: EscalationLevel;
+  escalatedAt?: Date | null;
   followUp: { dueAt: Date; status: FollowUpStatus } | null;
 }
 
@@ -83,7 +84,7 @@ export function computeAttention(snapshot: AttentionSnapshot, now: Date, config:
     add('GENERIC_STATE_SLA_BREACH', 'Review the overdue workflow task and record the next action.', w.genericStateSlaBreach);
 
   const { overdueBy, slaPeriods } = overdueInfo(snapshot, now, config);
-  if (overdueBy > 0 && slaDuration > 0) add('OVERDUE_PERIOD_BONUS', 'Additional points reflect completed overdue SLA periods.', Math.min(w.overdueBonusCap, w.overduePerSlaPeriod * slaPeriods));
+  if (overdueBy > 0 && stateSlaKey[snapshot.state]) add('OVERDUE_PERIOD_BONUS', 'Additional points reflect completed overdue SLA periods.', Math.min(w.overdueBonusCap, w.overduePerSlaPeriod * slaPeriods));
   if (urgency === 'URGENT') add('URGENT_TIER', 'Higher-priority workflow timer tier applies.', w.urgent);
 
   reasons.sort((a, b) => b.points - a.points || a.code.localeCompare(b.code));
