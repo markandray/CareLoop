@@ -1,6 +1,6 @@
 # CareLoop database design
 
-This first schema stores the lifecycle state and the records needed to explain each handoff. `CaseEvent` is the patient timeline; `AuditLog` records security and administrative actions. Both logs are immutable at the PostgreSQL layer. Overdue status and attention level are derived by queries; only the configured case `dueAt` and escalation overlay are stored.
+This schema stores the lifecycle state and the records needed to explain each handoff. `CaseEvent` is the patient timeline; `AuditLog` records security and administrative actions. Both logs are immutable at the PostgreSQL layer. Overdue status and attention level are derived by queries; attention score/level/reasons are never stored. Only the configured case `dueAt` and escalation overlay are stored.
 
 ## Entity relationship diagram
 

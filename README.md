@@ -319,3 +319,15 @@ curl -i -b coordinator-cookies.txt -X POST "http://localhost:4000/api/v1/cases/$
   -d '{"channel":"PHONE","outcome":"NO_ANSWER","delayReason":"PATIENT_UNREACHABLE","notes":"Synthetic attempt."}'
 curl -i -b coordinator-cookies.txt "http://localhost:4000/api/v1/cases/$CASE_ID/contact-attempts?limit=25"
 ```
+
+Staff can read the rules-based attention queue. The level is operational and is calculated when queried;
+it does not represent clinical urgency. Filter the list to MEDIUM or HIGH, or ask for one visible case:
+
+```sh
+curl -i -b coordinator-cookies.txt 'http://localhost:4000/api/v1/attention/cases?minLevel=MEDIUM&limit=25'
+curl -i -b coordinator-cookies.txt "http://localhost:4000/api/v1/cases/$CASE_ID/attention"
+curl -i -b coordinator-cookies.txt 'http://localhost:4000/api/v1/cases?attentionOnly=true&limit=25'
+```
+
+The queue accepts `providerId` to filter by origin provider and an opaque `cursor` from the prior page.
+Patients receive 403. The response label is `Operational workflow rule, not a clinical risk assessment.`

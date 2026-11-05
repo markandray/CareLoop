@@ -1,5 +1,15 @@
 # AI and explanation design
 
+## Operational attention rules engine
+
+CareLoop uses deterministic operational rules instead of ML because this prototype has no validated outcome labels, and the queue must explain each handoff delay in language a coordinator can act on. The score is computed from the current case snapshot on each read. It is never stored, and it does not estimate disease severity or choose care.
+
+For an open case, the engine adds the configured points for every matching rule in Product Requirements §5.2. It adds an overdue bonus of `min(40, 10 * floor(overdueBy / currentStateSlaDuration))` when the case due date has passed, then adds 20 for the urgent operational timer tier. `overdueBy` is the non-negative elapsed time after the case's current `dueAt`; the SLA duration comes from the current workflow state and urgency in `workflowConfig.ts`. The state fallback table in Product Requirements §5.3 determines whether a generic state SLA breach can fire. Parallel rules for an unacknowledged `result_reviewed` notification, an unanswered consult, and repeated failed outreach can stack with a state rule. A CLOSED case returns zero and no reasons.
+
+Scores below 30 are LOW, 30 through 59 are MEDIUM, and 60 or more are HIGH. Reason text and suggested actions are fixed operational copy; they contain no patient or screening detail. The response always carries the exact label `Operational workflow rule, not a clinical risk assessment.` The workflow clock is injected, so advancing demo time changes the score without timers or sleeps.
+
+Worked example from Product Requirements §5.4: an urgent case in `REFERRAL_PENDING` has a 24 h SLA, a 25 point pending-referral rule, and the 20 point urgent-tier bonus. At 1 h overdue its overdue bonus is 0 and the total is 45 (MEDIUM). At 24 h overdue it is 55 (MEDIUM). At 48 h it is 65 (HIGH). At 96 h the overdue bonus is capped at 40 and the total is 85 (HIGH). The weights and SLA durations are illustrative operational configuration, not clinical standards.
+
 ## Deterministic explanation catalog
 
 Patient-facing explanations use a small, version-controlled bilingual catalog. Stable result-category and next-step codes select short English or Arabic sentences; fixed catalog text supplies the meaning, clinic-contact, limitation, and disclaimer sections. This keeps wording reviewable, predictable, and usable without a network service or API key. Catalog text is deliberately generic and does not name diseases, medicines, doses, or numeric thresholds. Arabic output is marked `clinicallyReviewed: false` and carries a visible note that it has not been clinically reviewed.

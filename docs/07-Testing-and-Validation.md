@@ -166,3 +166,18 @@ All database HTTP tests run with `node:test` against PostgreSQL through `npm run
 - `T-202a contact attempt derives current referral milestone and rejects client milestone identifiers`, `T-202a the second failed contact attempt does not raise LEVEL_2 and the third does`, and `T-202a failed counts are isolated when the case advances to a different milestone` cover server-derived milestone links and escalation counting.
 - `T-202a failed contact sends unreachable_retry while REACHED does not`, `T-202a patient and doctor cannot write contact attempts`, `T-202a contact attempt write creates audit row and a readable attempt list`, and `T-202a receiving coordinator can contact only while a live consented referral exists` cover notification, RBAC, audit, listing, and receiving-provider scope.
 - Not exercised: a browser UI workflow for these new actions, live external notification delivery, or a deployment with real providers/data. The notification remains an in-app outbox write.
+
+## T-205a — Read-time attention engine
+
+- `npm run lint` passed.
+- Root `npm run build` passed for Next.js, server TypeScript, and shared TypeScript. Next.js printed its existing ESLint plugin configuration warning.
+- `npm test`: 6 test files passed, 142 passed, 0 failed.
+- `npm run test:db`: 69 top-level TAP tests across 4 suites; 158 tests, 158 passed, 0 failed. All 13 migrations were already applied to `careloop_test`.
+- The 18 no-DB engine scenarios are named in `server/tests/attentionEngine.test.ts`; they cover each scoring rule, every state’s generic fallback mapping, urgency and overdue bonuses, the cap, the exact §5.4 scores `45/55/65/85`, score boundaries `29/30/59/60`, CLOSED behavior, rule stacking, sorting, and the operational reason-text denylist.
+- `origin staff, consented receiving staff, and admin see only their permitted scopes`, `patient receives 403 for attention list and single-case attention`, and `single case outside provider visibility is concealed with 404` verify visibility and role behavior.
+- `attention queue sorts by score and pages with an opaque cursor` verifies ordering and cursor paging. `new unassigned case scores thirty and urgent adds twenty` verifies the base urgent calculation.
+- `advancing the injected clock forty eight hours moves an overdue urgent referral from MEDIUM to HIGH`, `acknowledging result_reviewed removes the unacknowledged reason`, and `rejected referral reason appears only after the reassignment window` exercise time and parallel facts through HTTP/database reads.
+- `closed case is absent from the attention queue`, `attention reason text contains no clinical content`, and `snapshot query count stays constant for ten and fifty cases` verify filtering, copy safety, and batched loading. `attentionOnly case filter includes MEDIUM and HIGH cases using the engine` verifies the legacy case-list filter; `attention reads write audit records and patients cannot use attentionOnly as a level oracle` verifies audit coverage and the patient boundary.
+- `staff case list and detail include attention summary while patient DTO omits it` verifies the DTO boundary.
+- The T-202a gap tests are named `T-205a urgent referral rejection sets the four hour reassignment deadline`, `T-205a case referral history is scoped, cursor paged, and concealed from another provider`, and `T-205a referral appointment history is scoped, cursor paged, and concealed from another provider`.
+- Not exercised: a browser dashboard consuming the new response, real provider data, and external notification delivery. Attention is operational only and has no clinical validation claim.

@@ -121,6 +121,12 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: `modules/attention` with configurable rules returning reasons + suggested operational action; `attentionLevel` on case queries; periodic job writes escalation events and sets `escalationLevel`.
 - Accept: each rule has a unit test; reasons are plain-language; response includes the label "operational workflow rule, not a clinical risk assessment".
 
+#### [x] T-205a Read-time attention engine and API
+- Agent: Codex. Branch: `task/T-205a-attention`.
+- Output: pure configurable score engine; batched snapshot loader; role-scoped attention queue and detail APIs; staff case DTO summaries; engine-backed `attentionOnly` filter; contract and demo docs.
+- Evidence (2026-11-05): `npm run lint`, `npm run build`, `npm test` (142/142), and `npm run test:db` (158/158, 0 failures) pass. Named engine/HTTP scenarios verify each rule, scoring boundaries and worked example, scope, consent, paging, injected-clock changes, acknowledgement, rejected referral timing, audits, patient redaction, and constant query count for 10/50 cases. Step commits: `aa2d8dd` closes T-202a regression gaps; `e06023d` attention engine and unit scenarios; `9c19550` API and read service; `86a37fa`, `67b683c`, `4d9954b` HTTP scenarios and fixes. See `docs/07-Testing-and-Validation.md`.
+- T-205a complete. Parent T-205 remains open for the escalation job (T-205b).
+
 ### [x] T-206 Consent and cross-provider access
 - Agent: Codex. Depends: T-104
 - Output: consent create/revoke; cross-provider case access requires active consent; consent changes audited.

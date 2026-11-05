@@ -17,6 +17,8 @@ flowchart LR
 
 The workflow policy is kept in a single TypeScript table. The following section is generated from `server/src/core/stateMachine/transitionTable.ts`; regenerate it with `npm run docs:state-machine` after changing the policy.
 
+The attention module is a read-time operational projection. `attentionEngine.ts` is pure; `attentionService.ts` batch-loads referrals, appointments, contacts, consultations, and follow-ups for a page of cases, then applies `workflowConfig.ts`. Role visibility reuses `caseVisibility`. Scores and levels are not persisted, and staff case projections carry only the summary needed by their worklists.
+
 <!-- BEGIN GENERATED STATE MACHINE -->
 
 ## Lifecycle state diagram
