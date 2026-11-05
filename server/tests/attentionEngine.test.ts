@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeAttention, type AttentionSnapshot } from '../src/modules/attention/attentionEngine';
+import { computeAttention, overdueInfo, type AttentionSnapshot } from '../src/modules/attention/attentionEngine';
 import { workflowConfig } from '../src/config/workflowConfig';
 
 const now = new Date('2026-11-05T12:00:00.000Z');
@@ -14,6 +14,10 @@ function snapshot(overrides: Partial<AttentionSnapshot> = {}): AttentionSnapshot
 const codes = (s: AttentionSnapshot, at = now) => computeAttention(s, at).reasons.map((reason) => reason.code);
 
 describe('attention engine rules', () => {
+  it('shares overdue and completed SLA period calculation', () => {
+    const s = snapshot({ dueAt: new Date(now.getTime() - 2 * 86_400_000) });
+    expect(overdueInfo(s, now)).toEqual({ overdueBy: 2 * 86_400_000, slaPeriods: 2 });
+  });
   it('scores an unassigned open case', () => expect(computeAttention(snapshot({ ownerUserId: null }), now).score).toBe(30));
   it('scores unacknowledged result_reviewed after its window', () => expect(codes(snapshot({ notifiedAt: new Date(now.getTime() - 72 * 3600000) }), new Date(now.getTime() + 1))).toContain('NOTIFICATION_UNACKNOWLEDGED'));
   it('does not score an acknowledged initial notification', () => expect(codes(snapshot({ notifiedAt: new Date(now.getTime() - 100 * 3600000), acknowledgedAt: now }))).not.toContain('NOTIFICATION_UNACKNOWLEDGED'));

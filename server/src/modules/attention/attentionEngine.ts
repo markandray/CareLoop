@@ -40,6 +40,14 @@ const specificStateRules: Partial<Record<CaseState, boolean>> = {
   REFERRAL_PENDING: true, APPOINTMENT_SCHEDULED: true, CARE_STARTED: true,
 };
 
+/** Shared definition of state-SLA lateness for both attention and escalation. */
+export function overdueInfo(snapshot: Pick<AttentionSnapshot, 'state' | 'urgency' | 'dueAt'>, now: Date, config: Config = workflowConfig): { overdueBy: number; slaPeriods: number } {
+  const overdueBy = snapshot.dueAt ? Math.max(0, now.getTime() - snapshot.dueAt.getTime()) : 0;
+  const slaKey = stateSlaKey[snapshot.state];
+  const slaDuration = slaKey ? config.slaMs[slaKey][snapshot.urgency] : 0;
+  return { overdueBy, slaPeriods: slaDuration > 0 ? Math.floor(overdueBy / slaDuration) : 0 };
+}
+
 /** Pure operational scoring over a database-independent snapshot. */
 export function computeAttention(snapshot: AttentionSnapshot, now: Date, config: Config = workflowConfig): AttentionResult {
   if (snapshot.state === 'CLOSED') return { score: 0, attentionLevel: 'LOW', reasons: [], suggestedAction: 'No operational action is required.', label: ATTENTION_LABEL, overdueBy: 0, slaPeriods: 0 };
@@ -74,10 +82,7 @@ export function computeAttention(snapshot: AttentionSnapshot, now: Date, config:
   if (!specificStateRules[snapshot.state] && snapshot.dueAt && now > snapshot.dueAt)
     add('GENERIC_STATE_SLA_BREACH', 'Review the overdue workflow task and record the next action.', w.genericStateSlaBreach);
 
-  const overdueBy = snapshot.dueAt ? Math.max(0, now.getTime() - snapshot.dueAt.getTime()) : 0;
-  const slaKey = stateSlaKey[snapshot.state];
-  const slaDuration = slaKey ? config.slaMs[slaKey][urgency] : 0;
-  const slaPeriods = slaDuration > 0 ? Math.floor(overdueBy / slaDuration) : 0;
+  const { overdueBy, slaPeriods } = overdueInfo(snapshot, now, config);
   if (overdueBy > 0 && slaDuration > 0) add('OVERDUE_PERIOD_BONUS', 'Additional points reflect completed overdue SLA periods.', Math.min(w.overdueBonusCap, w.overduePerSlaPeriod * slaPeriods));
   if (urgency === 'URGENT') add('URGENT_TIER', 'Higher-priority workflow timer tier applies.', w.urgent);
 
