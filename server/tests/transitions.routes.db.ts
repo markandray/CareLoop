@@ -398,28 +398,28 @@ describe('T-105b transition HTTP routes', () => {
     ] });
     const first = await api('COORDINATOR_ORIGIN', 'GET', `/cases/${item.id}/referrals?limit=1`);
     assert.equal(first.status, 200);
-    const firstBody = await responseBody(first);
+    const firstBody = await first.json() as { items: unknown[]; nextCursor: string | null };
     assert.equal(firstBody.items.length, 1);
     assert.ok(firstBody.nextCursor);
     const second = await api('COORDINATOR_ORIGIN', 'GET', `/cases/${item.id}/referrals?limit=1&cursor=${encodeURIComponent(firstBody.nextCursor)}`);
-    assert.equal((await responseBody(second)).items.length, 1);
+    assert.equal(((await second.json()) as { items: unknown[] }).items.length, 1);
     assert.equal((await api('COORDINATOR_ALTERNATE', 'GET', `/cases/${item.id}/referrals`)).status, 404);
   });
 
   test('T-205a referral appointment history is scoped, cursor paged, and concealed from another provider', async () => {
     const item = await makeCase('REFERRAL_PENDING');
-    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'ACCEPTED' } });
+    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'ACCEPTED', respondedAt: now } });
     await prisma.appointment.createMany({ data: [
       { referralId: referral.id, scheduledAt: new Date(now.getTime() + 86400000), status: 'SCHEDULED', createdAt: new Date(now.getTime() - 1000), updatedAt: new Date(now.getTime() - 1000) },
       { referralId: referral.id, scheduledAt: new Date(now.getTime() + 2 * 86400000), status: 'SCHEDULED', createdAt: now, updatedAt: now },
     ] });
     const first = await api('COORDINATOR_ORIGIN', 'GET', `/referrals/${referral.id}/appointments?limit=1`);
     assert.equal(first.status, 200);
-    const firstBody = await responseBody(first);
+    const firstBody = await first.json() as { items: unknown[]; nextCursor: string | null };
     assert.equal(firstBody.items.length, 1);
     assert.ok(firstBody.nextCursor);
     const second = await api('COORDINATOR_ORIGIN', 'GET', `/referrals/${referral.id}/appointments?limit=1&cursor=${encodeURIComponent(firstBody.nextCursor)}`);
-    assert.equal((await responseBody(second)).items.length, 1);
+    assert.equal(((await second.json()) as { items: unknown[] }).items.length, 1);
     assert.equal((await api('COORDINATOR_ALTERNATE', 'GET', `/referrals/${referral.id}/appointments`)).status, 404);
   });
 

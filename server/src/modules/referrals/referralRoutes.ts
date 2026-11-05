@@ -88,7 +88,7 @@ function uuidParam(value: string | string[] | undefined): string {
 function pageResponse<T extends z.ZodTypeAny>(rows: Array<Record<string, unknown>>, limit: number, now: Date, itemSchema: T) {
   const hasMore = rows.length > limit;
   const pageRows = hasMore ? rows.slice(0, limit) : rows;
-  const items = pageRows.map((row) => itemSchema.parse({ ...row, createdAt: (row.createdAt as Date).toISOString(), updatedAt: (row.updatedAt as Date).toISOString(), scheduledAt: row.scheduledAt instanceof Date ? row.scheduledAt.toISOString() : row.scheduledAt, attendedAt: row.attendedAt instanceof Date ? row.attendedAt.toISOString() : row.attendedAt }));
+  const items = pageRows.map((row) => itemSchema.parse({ ...row, createdAt: (row.createdAt as Date).toISOString(), updatedAt: (row.updatedAt as Date).toISOString(), scheduledAt: row.scheduledAt instanceof Date ? row.scheduledAt.toISOString() : row.scheduledAt, attendedAt: row.attendedAt instanceof Date ? row.attendedAt.toISOString() : row.attendedAt ?? null }));
   const last = pageRows[pageRows.length - 1];
   return makeCursorPageSchema(itemSchema).parse({ items, nextCursor: hasMore && last ? encodeCursor(last.createdAt as Date, last.id as string) : null, updatedAt: now.toISOString() });
 }
