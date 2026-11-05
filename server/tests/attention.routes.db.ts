@@ -309,7 +309,7 @@ describe('T-205a attention HTTP and database behavior', () => {
   test('closed case is absent from the attention queue', async () => {
     const item = await makeCase({ providerId: providerA, state: 'CLOSED' });
     assert.equal((await api('ADMIN', 'GET', `/cases/${item.id}/attention`)).status, 404);
-    assert.ok(!(await getList('ADMIN')).some((row) => row.caseId === item.id));
+    assert.ok(!(await getList('ADMIN', providerA)).some((row) => row.caseId === item.id));
   });
 
   test('attention reason text contains no clinical content', async () => {
@@ -381,5 +381,9 @@ async function api(userKey: keyof typeof users, method: string, path: string, bo
   const token = jwt.sign({ userId: user.id, role: user.role }, secret, { expiresIn: '1h' });
   return fetch(`${baseUrl}/api/v1${path}`, { method, headers: { Cookie: `${AUTH_COOKIE_NAME}=${token}`, Origin: origin, ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
 }
-async function getList(userKey: keyof typeof users) { return (await (await api(userKey, 'GET', '/attention/cases?limit=100')).json() as { items: Array<{ caseId: string }> }).items; }
+async function getList(userKey: keyof typeof users, providerId?: string) {
+  const query = new URLSearchParams({ limit: '100' });
+  if (providerId) query.set('providerId', providerId);
+  return (await (await api(userKey, 'GET', `/attention/cases?${query.toString()}`)).json() as { items: Array<{ caseId: string }> }).items;
+}
 async function getAttention(userKey: keyof typeof users, caseId: string) { const response = await api(userKey, 'GET', `/cases/${caseId}/attention`); if (!response.ok) throw new Error(`Attention request failed ${response.status}: ${await response.text()}`); return await response.json() as { score: number; attentionLevel: string; reasons: Array<{ code: string; text: string }> }; }

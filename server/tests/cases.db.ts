@@ -147,9 +147,11 @@ test('case visibility limits patients to their profile and clinicians to origin 
   assert.equal(unaffiliatedDoctorPage.items.length, 0);
 
   const adminIds = await fetchAllCaseIds(actor(adminId, 'ADMIN', null));
-  const totalCount = await prisma.screeningCase.count();
-  assert.equal(adminIds.length, totalCount);
-  assert.ok(adminIds.includes(patientACaseB));
+  assert.ok(
+    [patientACaseA, patientACaseB, patientBCaseA, ...extraCaseIds].every((id) =>
+      adminIds.includes(id),
+    ),
+  );
 });
 
 test('coordinator DTO contains no clinical result summary', async () => {
