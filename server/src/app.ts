@@ -69,13 +69,14 @@ export function createApp(
   );
 
   apiV1Router.use('/cases', createCaseRouter(prisma, clock, authenticate));
+  // Mount staff attention reads before the coordinator-only case contact router.
+  apiV1Router.use('/', createAttentionRouter(prisma, clock, authenticate));
   apiV1Router.use('/cases', createContactAttemptRouter(prisma, clock, authenticate));
   apiV1Router.use('/patients', createConsentRouter(prisma, clock, authenticate));
   apiV1Router.use('/providers', createProviderRouter(prisma, clock, authenticate));
   apiV1Router.use('/referrals', createReferralRouter(prisma, clock, authenticate));
   apiV1Router.use('/appointments', createAppointmentRouter(prisma, clock, authenticate));
   apiV1Router.use('/notifications', createNotificationRouter(prisma, clock, authenticate));
-  apiV1Router.use('/', createAttentionRouter(prisma, clock, authenticate));
 
   // Development/test-only routes for verifying requireRole matrix and auth behaviors
   if (env.NODE_ENV !== 'production') {
