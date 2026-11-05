@@ -176,6 +176,9 @@ export async function listCases(
   query: CaseListQuery,
 ): Promise<CaseCursorPage> {
   const parsed = CaseListQuerySchema.parse(query);
+  if (actor.role === 'PATIENT' && parsed.attentionOnly) {
+    throw AppError.forbidden('The attention-only worklist is available to staff roles only.');
+  }
   const cursor = parsed.cursor ? decodeCursor(parsed.cursor) : undefined;
   const now = dependencies.clock.now();
   const clauses: Prisma.ScreeningCaseWhereInput[] = [caseVisibility(actor, now)];

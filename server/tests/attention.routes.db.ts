@@ -158,6 +158,25 @@ describe('T-205a attention HTTP and database behavior', () => {
     const list = await (await api('DOCTOR_A', 'GET', `/cases?limit=100`)).json() as { items: Array<Record<string, unknown>> };
     assert.ok(list.items.find((row) => row.id === item.id)?.attention);
   });
+
+  test('attentionOnly case filter includes MEDIUM and HIGH cases using the engine', async () => {
+    const low = await makeCase({ providerId: providerA });
+    const medium = await makeCase({ providerId: providerA, owner: false });
+    const response = await api('DOCTOR_A', 'GET', '/cases?attentionOnly=true&limit=100');
+    assert.equal(response.status, 200);
+    const items = (await response.json() as { items: Array<{ id: string; attention?: { level: string } }> }).items;
+    assert.ok(items.some((item) => item.id === medium.id && item.attention?.level === 'MEDIUM'));
+    assert.ok(!items.some((item) => item.id === low.id));
+  });
+
+  test('attention reads write audit records and patients cannot use attentionOnly as a level oracle', async () => {
+    const item = await makeCase({ providerId: providerA });
+    await getAttention('DOCTOR_A', item.id);
+    await getList('DOCTOR_A');
+    assert.ok(await prisma.auditLog.findFirst({ where: { action: 'ATTENTION_READ', actorId: users.DOCTOR_A.id, entityId: item.id } }));
+    assert.ok(await prisma.auditLog.findFirst({ where: { action: 'ATTENTION_LIST_READ', actorId: users.DOCTOR_A.id } }));
+    assert.equal((await api('PATIENT', 'GET', '/cases?attentionOnly=true')).status, 403);
+  });
 });
 
 async function makeProvider(key: string) { return prisma.provider.create({ data: { name: `T205a-${suffix}-${key}`, type: ProviderType.CLINIC } }); }
