@@ -381,6 +381,48 @@ describe('T-105b transition HTTP routes', () => {
     assert.ok(await prisma.auditLog.findFirst({ where: { action: 'REFERRAL_REJECTED', entityId: referral.id } }));
   });
 
+  test('T-205a urgent referral rejection sets the four hour reassignment deadline', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    await prisma.screeningCase.update({ where: { id: item.id }, data: { urgencyLabel: 'URGENT' } });
+    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING' } });
+    assert.equal((await api('COORDINATOR_RECEIVING', 'POST', `/referrals/${referral.id}/reject`, { rejectionReason: 'No capacity' })).status, 200);
+    const updated = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
+    assert.equal(updated.dueAt?.toISOString(), new Date(now.getTime() + 4 * 60 * 60 * 1000).toISOString());
+  });
+
+  test('T-205a case referral history is scoped, cursor paged, and concealed from another provider', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    await prisma.referral.createMany({ data: [
+      { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'SUPERSEDED', createdAt: new Date(now.getTime() - 1000), updatedAt: new Date(now.getTime() - 1000) },
+      { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING', createdAt: now, updatedAt: now },
+    ] });
+    const first = await api('COORDINATOR_ORIGIN', 'GET', `/cases/${item.id}/referrals?limit=1`);
+    assert.equal(first.status, 200);
+    const firstBody = await responseBody(first);
+    assert.equal(firstBody.items.length, 1);
+    assert.ok(firstBody.nextCursor);
+    const second = await api('COORDINATOR_ORIGIN', 'GET', `/cases/${item.id}/referrals?limit=1&cursor=${encodeURIComponent(firstBody.nextCursor)}`);
+    assert.equal((await responseBody(second)).items.length, 1);
+    assert.equal((await api('COORDINATOR_ALTERNATE', 'GET', `/cases/${item.id}/referrals`)).status, 404);
+  });
+
+  test('T-205a referral appointment history is scoped, cursor paged, and concealed from another provider', async () => {
+    const item = await makeCase('REFERRAL_PENDING');
+    const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'ACCEPTED' } });
+    await prisma.appointment.createMany({ data: [
+      { referralId: referral.id, scheduledAt: new Date(now.getTime() + 86400000), status: 'SCHEDULED', createdAt: new Date(now.getTime() - 1000), updatedAt: new Date(now.getTime() - 1000) },
+      { referralId: referral.id, scheduledAt: new Date(now.getTime() + 2 * 86400000), status: 'SCHEDULED', createdAt: now, updatedAt: now },
+    ] });
+    const first = await api('COORDINATOR_ORIGIN', 'GET', `/referrals/${referral.id}/appointments?limit=1`);
+    assert.equal(first.status, 200);
+    const firstBody = await responseBody(first);
+    assert.equal(firstBody.items.length, 1);
+    assert.ok(firstBody.nextCursor);
+    const second = await api('COORDINATOR_ORIGIN', 'GET', `/referrals/${referral.id}/appointments?limit=1&cursor=${encodeURIComponent(firstBody.nextCursor)}`);
+    assert.equal((await responseBody(second)).items.length, 1);
+    assert.equal((await api('COORDINATOR_ALTERNATE', 'GET', `/referrals/${referral.id}/appointments`)).status, 404);
+  });
+
   test('T-202a referral rejection is forbidden to the origin coordinator', async () => {
     const item = await makeCase('REFERRAL_PENDING');
     const referral = await prisma.referral.create({ data: { caseId: item.id, fromProviderId: originId, toProviderId: receivingId, status: 'PENDING' } });
