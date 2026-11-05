@@ -33,6 +33,7 @@ import { caseVisibility, type CaseActor } from './caseVisibility';
 import { loadFacts } from './transitionFacts';
 import { queueNotification } from '../notifications/notificationService';
 import { nextSteps, resultCategories } from '../explanation/catalog';
+import { loadAttentionSnapshots, summarizeAttention } from '../attention/attentionService';
 
 export interface TransitionServiceDependencies {
   prisma: PrismaClient;
@@ -246,6 +247,7 @@ export async function executeTransition(
       where: { id: event.id },
       include: { actor: true },
     });
+    const attentionSnapshot = (await loadAttentionSnapshots(tx, [updatedCase], deps.clock.now())).get(updatedCase.id)!;
     let projectedCase;
     let projectedEvent = projectStaffCaseEvent(eventWithActor);
     if (
@@ -259,7 +261,7 @@ export async function executeTransition(
       projectedCase = projectReferralPacket(updatedCase, referral);
       projectedEvent = { ...projectedEvent, payload: null };
     } else {
-      projectedCase = projectCaseForActor(updatedCase, actor);
+      projectedCase = projectCaseForActor(updatedCase, actor, summarizeAttention(attentionSnapshot, deps.clock.now()));
     }
     return CaseTransitionResponseSchema.parse({ case: projectedCase, event: projectedEvent });
   });

@@ -288,6 +288,7 @@ export const CaseDetailDoctorSchema = StrictObject({
   patient: PatientSummarySchema,
   originProvider: ProviderSummarySchema,
   owner: CaseOwnerSchema,
+  attention: z.object({ level: z.enum(['LOW', 'MEDIUM', 'HIGH']), score: z.number().int().nonnegative() }).strict(),
   referrals: z.array(ReferralSummarySchema),
   appointments: z.array(AppointmentSummarySchema),
   explanations: z.array(ExplanationDtoSchema),
@@ -305,6 +306,7 @@ export const CaseDetailCoordinatorSchema = StrictObject({
   patient: PatientSummarySchema,
   originProvider: ProviderSummarySchema,
   owner: CaseOwnerSchema,
+  attention: z.object({ level: z.enum(['LOW', 'MEDIUM', 'HIGH']), score: z.number().int().nonnegative() }).strict(),
   referrals: z.array(ReferralSummarySchema),
   appointments: z.array(AppointmentSummarySchema),
   events: z.array(CaseEventDtoStaffSchema),
@@ -321,6 +323,7 @@ export const CaseDetailAdminSchema = StrictObject({
   patient: PatientSummarySchema,
   originProvider: ProviderSummarySchema,
   owner: CaseOwnerSchema,
+  attention: z.object({ level: z.enum(['LOW', 'MEDIUM', 'HIGH']), score: z.number().int().nonnegative() }).strict(),
   referrals: z.array(ReferralSummarySchema),
   appointments: z.array(AppointmentSummarySchema),
   explanations: z.array(ExplanationDtoSchema),
@@ -353,6 +356,7 @@ export const CaseListItemSchema = StrictObject({
   escalationLevel: EscalationLevelSchema,
   createdAt: UtcTimestampSchema,
   updatedAt: UtcTimestampSchema,
+  attention: z.object({ level: z.enum(['LOW', 'MEDIUM', 'HIGH']), score: z.number().int().nonnegative() }).strict().optional(),
 });
 export type CaseListItem = z.infer<typeof CaseListItemSchema>;
 
@@ -682,7 +686,8 @@ export const AdminConfigUpdateRequestSchema = StrictObject({
 export const AttentionLevelSchema = z.enum(['LOW', 'MEDIUM', 'HIGH']);
 export const AttentionReasonSchema = StrictObject({
   code: z.string(),
-  message: z.string(),
+  text: z.string(),
+  points: z.number().int().nonnegative(),
 });
 export const AttentionResponseSchema = StrictObject({
   caseId: CaseIdSchema,
@@ -693,9 +698,24 @@ export const AttentionResponseSchema = StrictObject({
   label: z.literal(
     'Operational workflow rule, not a clinical risk assessment.',
   ),
+  overdueBy: z.number().int().nonnegative(),
+  slaPeriods: z.number().int().nonnegative(),
   updatedAt: UtcTimestampSchema,
 });
 export type AttentionResponse = z.infer<typeof AttentionResponseSchema>;
+
+export const AttentionListQuerySchema = CursorQuerySchema.extend({
+  minLevel: AttentionLevelSchema.optional(),
+  providerId: UuidSchema.optional(),
+}).strict();
+export type AttentionListQuery = z.infer<typeof AttentionListQuerySchema>;
+export const AttentionQueueItemSchema = StrictObject({
+  caseId: CaseIdSchema,
+  state: CaseStateSchema,
+  dueAt: UtcTimestampSchema.nullable(),
+  ...AttentionResponseSchema.omit({ caseId: true, updatedAt: true }).shape,
+});
+export const AttentionQueuePageSchema = makeCursorPageSchema(AttentionQueueItemSchema);
 
 export const MetricCohortBasisSchema = z.enum([
   'CASES_CREATED_MORE_THAN_30_DAYS_AGO_OR_CLOSED',

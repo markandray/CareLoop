@@ -38,6 +38,7 @@ import {
   type CaseReadableProjection,
 } from './caseProjection';
 import { caseVisibility, type CaseActor } from './caseVisibility';
+import { loadAttentionSnapshots, summarizeAttention } from '../attention/attentionService';
 
 export interface CaseServiceDependencies {
   prisma: PrismaClient;
@@ -164,7 +165,8 @@ export async function createCase(
       where: { id: created.id },
       include: caseDetailInclude,
     });
-    return projectCaseForActor(row, actor);
+    const snapshot = (await loadAttentionSnapshots(tx, [row], dependencies.clock.now())).get(row.id)!;
+    return projectCaseForActor(row, actor, summarizeAttention(snapshot, dependencies.clock.now()));
   });
 }
 
@@ -180,16 +182,7 @@ export async function listCases(
   if (parsed.state) clauses.push({ state: parsed.state });
   if (parsed.ownerUserId) clauses.push({ ownerUserId: parsed.ownerUserId });
   if (parsed.updatedSince) clauses.push({ updatedAt: { gte: new Date(parsed.updatedSince) } });
-  if (parsed.attentionOnly) {
-    // Until the attention module lands, list the data-layer conditions available here.
-    clauses.push({
-      OR: [
-        { ownerUserId: null, ownerQueueRole: null, ownerQueueProviderId: null },
-        { dueAt: { lt: now } },
-      ],
-    });
-  }
-  if (cursor) clauses.push(caseCursorWhere(cursor, 'desc'));
+  if (cursor && !parsed.attentionOnly) clauses.push(caseCursorWhere(cursor, 'desc'));
   const where: Prisma.ScreeningCaseWhereInput = { AND: clauses };
 
   return withTransaction(dependencies.prisma, async (tx) => {
@@ -197,7 +190,7 @@ export async function listCases(
       where,
       include: caseListInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: parsed.limit + 1,
+      ...(parsed.attentionOnly ? {} : { take: parsed.limit + 1 }),
     });
     await writeAudit(dependencies)(
       tx,
@@ -210,10 +203,20 @@ export async function listCases(
       },
       dependencies.clock,
     );
-    const page = pageRows(rows, parsed.limit);
+    const snapshots = await loadAttentionSnapshots(tx, rows, now);
+    const scored = rows.map((row) => ({ row, attention: summarizeAttention(snapshots.get(row.id)!, now) }));
+    let candidates = parsed.attentionOnly
+      ? scored.filter(({ attention }) => attention.level !== 'LOW')
+      : scored;
+    if (cursor && parsed.attentionOnly) {
+      candidates = candidates.filter(({ row }) => row.createdAt < cursor.createdAt || (row.createdAt.getTime() === cursor.createdAt.getTime() && row.id < cursor.id));
+    }
+    const hasMore = candidates.length > parsed.limit;
+    const selected = candidates.slice(0, parsed.limit);
+    const last = selected.at(-1)?.row;
     return CaseCursorPageSchema.parse({
-      items: page.items.map(projectCaseListItem),
-      nextCursor: page.nextCursor,
+      items: selected.map(({ row, attention }) => projectCaseListItem(row, actor.role === 'PATIENT' ? undefined : attention)),
+      nextCursor: hasMore && last ? encodeCursor(last) : null,
       updatedAt: dependencies.clock.now().toISOString(),
     });
   });
@@ -249,7 +252,8 @@ export async function getCase(
       if (!referral) throw AppError.notFound('Case not found.');
       return projectReferralPacket(row, referral);
     }
-    return projectCaseForActor(row, actor);
+    const snapshot = (await loadAttentionSnapshots(tx, [row], now)).get(row.id)!;
+    return projectCaseForActor(row, actor, summarizeAttention(snapshot, now));
   });
 }
 

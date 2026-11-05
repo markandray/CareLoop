@@ -20,6 +20,7 @@ import { createProviderRouter } from './modules/providers/providerRoutes';
 import { createReferralRouter } from './modules/referrals/referralRoutes';
 import { createAppointmentRouter } from './modules/referrals/appointmentRoutes';
 import { createNotificationRouter } from './modules/notifications/notificationRoutes';
+import { createAttentionRouter } from './modules/attention/attentionRoutes';
 
 export interface AppContext {
   prisma: PrismaClient;
@@ -74,6 +75,7 @@ export function createApp(
   apiV1Router.use('/referrals', createReferralRouter(prisma, clock, authenticate));
   apiV1Router.use('/appointments', createAppointmentRouter(prisma, clock, authenticate));
   apiV1Router.use('/notifications', createNotificationRouter(prisma, clock, authenticate));
+  apiV1Router.use('/', createAttentionRouter(prisma, clock, authenticate));
 
   // Development/test-only routes for verifying requireRole matrix and auth behaviors
   if (env.NODE_ENV !== 'production') {

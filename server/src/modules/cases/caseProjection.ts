@@ -157,6 +157,7 @@ const patientEventLabels: Record<CaseEventType, string> = {
 export function projectCaseForActor(
   row: CaseProjectionRecord,
   actor: CaseActor,
+  attention?: { level: 'LOW' | 'MEDIUM' | 'HIGH'; score: number },
 ): CaseDetailProjection {
   const base = caseIdentity(row);
   const referrals = row.referrals.map((referral) => referralSummary(referral));
@@ -203,6 +204,7 @@ export function projectCaseForActor(
         patient: patientSummary(row),
         originProvider: providerSummary(row.originProvider),
         owner: caseOwner(row),
+        ...(attention ? { attention } : {}),
         referrals,
         appointments,
         explanations: row.explanations.map(explanationDto),
@@ -224,6 +226,7 @@ export function projectCaseForActor(
         patient: patientSummary(row),
         originProvider: providerSummary(row.originProvider),
         owner: caseOwner(row),
+        ...(attention ? { attention } : {}),
         referrals,
         appointments,
         events: row.events.map(projectStaffCaseEvent),
@@ -240,6 +243,7 @@ export function projectCaseForActor(
         patient: patientSummary(row),
         originProvider: providerSummary(row.originProvider),
         owner: caseOwner(row),
+        ...(attention ? { attention } : {}),
         referrals,
         appointments,
         explanations: row.explanations.map(explanationDto),
@@ -249,7 +253,7 @@ export function projectCaseForActor(
   }
 }
 
-export function projectCaseListItem(row: CaseListProjectionRecord): CaseListItem {
+export function projectCaseListItem(row: CaseListProjectionRecord, attention?: { level: 'LOW' | 'MEDIUM' | 'HIGH'; score: number }): CaseListItem {
   return CaseListItemSchema.parse({
     id: row.id,
     state: row.state,
@@ -263,6 +267,7 @@ export function projectCaseListItem(row: CaseListProjectionRecord): CaseListItem
     escalationLevel: row.escalationLevel,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    ...(attention ? { attention } : {}),
   });
 }
 
