@@ -45,6 +45,16 @@ describe('attention engine rules', () => {
   });
 
   it('adds the urgent tier bonus', () => expect(computeAttention(snapshot({ urgency: 'URGENT' }), now).score - computeAttention(snapshot(), now).score).toBe(20));
+  it('uses a neutral action when only the urgent timer rule applies', () => {
+    const result = computeAttention(snapshot({ urgency: 'URGENT' }), now);
+    expect(result.reasons).toEqual([{ code: 'URGENT_TIER', text: 'This case is on the urgent timer.', points: 20 }]);
+    expect(result.suggestedAction).toBe('No action needed yet.');
+  });
+  it('uses the action belonging to the highest-scoring reason', () => {
+    const result = computeAttention(snapshot({ urgency: 'URGENT', ownerUserId: null }), now);
+    expect(result.reasons[0]?.code).toBe('UNASSIGNED');
+    expect(result.suggestedAction).toBe('Assign a doctor or coordinator and set a due date.');
+  });
   it('caps overdue bonus at four periods', () => {
     const s = snapshot({ state: 'REFERRAL_PENDING', urgency: 'URGENT', dueAt: new Date(now.getTime() - 96 * 3600000), currentReferral: { status: 'PENDING', createdAt: now, respondedAt: null } });
     expect(computeAttention(s, now).reasons.find((r) => r.code === 'OVERDUE_PERIOD_BONUS')?.points).toBe(40);
@@ -67,12 +77,21 @@ describe('attention engine rules', () => {
     expect(result.score).toBeGreaterThan(100);
     expect(result.reasons.map((r) => r.points)).toEqual([...result.reasons.map((r) => r.points)].sort((a, b) => b - a));
   });
-  it('keeps every reason free of numeric facts and clinical terms', () => {
+  it('keeps every attention reason and action digit-free and free of denylisted clinical terms', () => {
     const result = computeAttention(snapshot({ state: 'REFERRAL_PENDING', urgency: 'URGENT', ownerUserId: null, dueAt: new Date(now.getTime() - 96 * 3600000), notifiedAt: new Date(now.getTime() - 100 * 3600000), currentReferral: { status: 'REJECTED', createdAt: now, respondedAt: new Date(now.getTime() - 5 * 3600000) }, failedContactAttempts: 3, openConsultAgeMs: 30 * 3600000 }), now);
-    const clinical = /diagnos|disease|cancer|tumou?r|symptom|treatment|medicine|drug|dose|result|screening|clinical|urgent/i;
+    const clinical = /diagnos|disease|cancer|tumou?r|symptom|treatment|medicine|drug|dose|result|screening|clinical/i;
     for (const reason of result.reasons) {
-      expect(reason.text).not.toMatch(/\d+(?!\s*(?:hours?|days?))/i);
+      expect(reason.text).not.toMatch(/[\p{N}]/u);
       expect(reason.text).not.toMatch(clinical);
+      expect(copyFor(reason.code)).not.toMatch(/[\p{N}]/u);
+      expect(copyFor(reason.code)).not.toMatch(clinical);
     }
+    expect(result.suggestedAction).not.toMatch(/[\p{N}]/u);
+    expect(result.suggestedAction).not.toMatch(clinical);
   });
 });
+
+function copyFor(code: string): string {
+  const result = computeAttention(snapshot({ urgency: 'URGENT', ownerUserId: null }), now);
+  return result.reasons.find((reason) => reason.code === code)?.text ?? '';
+}
