@@ -16,11 +16,12 @@ import { useT } from '../../lib/i18n/context';
 import { ShellLayout } from '../../components/ShellLayout';
 import { ReviewNoticeBanner } from '../../components/ReviewNoticeBanner';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
+import { getPatientProgress } from '../../lib/patient-portal';
 
 function PatientDashboard() {
   const { t, language } = useT();
   const [cases, setCases] = useState<CaseDetailPatient[] | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadByCase, setUnreadByCase] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -46,7 +47,10 @@ function PatientDashboard() {
           setCases(details);
           // The API has no per-notification read flag. SENT is the available proxy
           // until acknowledgement state is exposed by the contract.
-          setUnreadCount(notifications.items.filter((item) => item.status === 'SENT').length);
+          setUnreadByCase(notifications.items.reduce<Record<string, number>>((counts, item) => {
+            if (item.status === 'SENT') counts[item.caseId] = (counts[item.caseId] ?? 0) + 1;
+            return counts;
+          }, {}));
           setError(false);
         }
       } catch {
@@ -79,9 +83,9 @@ function PatientDashboard() {
                 <Card className="h-full transition-shadow hover:shadow-md">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <h2 className="text-lg font-semibold text-slate-900">{item.id}</h2>
-                    {unreadCount > 0 && <span className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-900"><span>{unreadCount}</span> {t('patient_unreadBadge')}</span>}
+                    {(unreadByCase[item.id] ?? 0) > 0 && <span className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-900"><span>{unreadByCase[item.id]}</span> {t('patient_unreadBadge')}</span>}
                   </div>
-                  <p className="mt-2 inline-flex rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-800">{t(`patient_status_${item.state}`)}</p>
+                  <p className="mt-2 inline-flex rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-800">{item.state === 'CLOSED' ? t(getPatientProgress(item.state, item.closureReason).closureLabel as never) : t(`patient_status_${item.state}`)}</p>
                   <div className="mt-4">
                     <h3 className="text-sm font-semibold text-slate-800">{t('patient_nextStep')}</h3>
                     <p className="mt-1 text-sm text-slate-700">{item.recommendedNextStep ?? item.statusDescription}</p>
