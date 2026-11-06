@@ -6,10 +6,13 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { after, before, test } from 'node:test';
 import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
 import { DatabaseClock } from '../src/core/clock';
 import { createApp } from '../src/app';
 import { runSeed } from '../src/seed';
 import { transitionTable } from '../src/core/stateMachine/transitionTable';
+import { runEscalationSweep } from '../src/modules/escalation/escalationService';
+import { AUTH_COOKIE_NAME } from '../src/middleware/auth/authMiddleware';
 
 const prisma = new PrismaClient();
 const clock = new DatabaseClock(prisma.systemSetting);
@@ -127,4 +130,32 @@ test('demo seed prints the stuck case identifier and a fourteen-case summary', (
   assert.match(seedOutput, new RegExp(`STUCK_DEMO_CASE_ID=${stuckId}`));
   assert.match(seedOutput, /caseId/);
   assert.match(seedOutput, /STUCK_DEMO_CASE_ID=/);
+});
+
+test('stuck demo case reaches MEDIUM at 25 hours, HIGH at 72 hours, and LEVEL_3 at 96 hours', async () => {
+  const coordinator = await prisma.user.findUniqueOrThrow({ where: { email: 'coordinator.hospital@careloop.local' } });
+  const token = jwt.sign({ userId: coordinator.id, role: 'COORDINATOR' }, secret, { expiresIn: '1h' });
+  const readAttention = async () => {
+    const response = await fetch(`${apiUrl}/api/v1/cases/${stuckId}/attention`, { headers: { Cookie: `${AUTH_COOKIE_NAME}=${token}` } });
+    assert.equal(response.status, 200);
+    return await response.json() as { attentionLevel: string; score: number };
+  };
+
+  await clock.advance(25, 'hours');
+  await runEscalationSweep({ prisma, clock });
+  const at25 = await readAttention();
+  assert.equal(at25.attentionLevel, 'MEDIUM');
+  assert.equal(at25.score, 45);
+  assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: stuckId } })).escalationLevel, 'LEVEL_1');
+
+  await clock.advance(47, 'hours');
+  await runEscalationSweep({ prisma, clock });
+  const at72 = await readAttention();
+  assert.equal(at72.attentionLevel, 'HIGH');
+  assert.equal(at72.score, 65);
+  assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: stuckId } })).escalationLevel, 'LEVEL_2');
+
+  await clock.advance(24, 'hours');
+  await runEscalationSweep({ prisma, clock });
+  assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: stuckId } })).escalationLevel, 'LEVEL_3');
 });

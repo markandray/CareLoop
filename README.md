@@ -69,7 +69,7 @@ Use the configured `DEMO_PASSWORD` (example: `CareLoopDemo2026!`) for all accoun
 | Care started and closed examples | `doctor.screening@careloop.local` |
 | Patient explanation and acknowledgement | `patient.en@careloop.local`, `patient.ar@careloop.local` |
 
-The stuck case is left at `REFERRAL_PENDING` with active cross-provider consent and an untouched pending referral. Do not advance the demo clock in the seed. During the presentation, the admin advances it by 48 hours; the urgent referral's 24-hour illustrative acceptance SLA is then overdue, so the operational attention queue shows it as HIGH and the sweep raises an escalation. Operational attention is not a clinical risk assessment.
+The stuck case is left at `REFERRAL_PENDING` with active cross-provider consent and an untouched pending referral. Do not advance the demo clock in the seed. During the presentation, the admin advances it by 25 hours total; the urgent referral's 24-hour illustrative acceptance SLA has just been exceeded, so attention is MEDIUM with score 45 and the sweep raises LEVEL_1. Advancing to 72 hours total (47 more hours) makes attention HIGH with score 65 and raises LEVEL_2. At 96 hours total the sweep raises LEVEL_3. The coordinator at the receiving provider sees the case throughout. Operational attention is not a clinical risk assessment.
 
 ## Auth curl examples
 
