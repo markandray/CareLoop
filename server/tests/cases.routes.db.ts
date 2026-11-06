@@ -255,12 +255,35 @@ describe('T-104b case routes', () => {
   });
 
   test('patient search returns only the approved DTO fields and writes PATIENT_SEARCH audit', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/patients?query=t104b`, { headers: authHeaders('DOCTOR_A') });
-    assert.equal(response.status, 200);
-    const body = await responseJson<{ items: Array<Record<string, unknown>> }>(response);
-    assert.ok(body.items.some((item) => item.id === patientId));
-    for (const item of body.items) assert.deepEqual(Object.keys(item).sort(), ['displayName', 'id', 'preferredLanguage', 'syntheticMrn']);
+    for (const term of ['atient', 't104b']) {
+      const response = await fetch(`${baseUrl}/api/v1/patients?query=${term}`, { headers: authHeaders('DOCTOR_A') });
+      assert.equal(response.status, 200);
+      const body = await responseJson<{ items: Array<Record<string, unknown>> }>(response);
+      assert.ok(body.items.some((item) => item.id === patientId), `search term ${term}`);
+      for (const item of body.items) assert.deepEqual(Object.keys(item).sort(), ['displayName', 'id', 'preferredLanguage', 'syntheticMrn']);
+    }
     assert.ok(await prisma.auditLog.findFirst({ where: { actorId: credentials.DOCTOR_A.id, action: 'PATIENT_SEARCH', entityType: 'Patient', entityId: credentials.DOCTOR_A.id } }));
+  });
+
+  test('patient search uses stable cursor pages and caps page size at twenty', async () => {
+    const matches = [];
+    for (const label of ['first', 'second']) {
+      const user = await createUser('PATIENT', `search-${label}`, null);
+      const patient = await prisma.patient.create({ data: { userId: user.id, syntheticMrn: `T104b-search-${label}-${suffix}`, dateOfBirth: new Date('1982-01-01T00:00:00.000Z') } });
+      matches.push(patient.id);
+    }
+    const firstResponse = await fetch(`${baseUrl}/api/v1/patients?query=search&limit=1`, { headers: authHeaders('ADMIN') });
+    assert.equal(firstResponse.status, 200);
+    const first = await responseJson<{ items: Array<{ id: string }>; nextCursor: string | null }>(firstResponse);
+    assert.equal(first.items.length, 1);
+    assert.ok(first.nextCursor);
+    const secondResponse = await fetch(`${baseUrl}/api/v1/patients?query=search&limit=1&cursor=${encodeURIComponent(first.nextCursor)}`, { headers: authHeaders('ADMIN') });
+    assert.equal(secondResponse.status, 200);
+    const second = await responseJson<{ items: Array<{ id: string }>; nextCursor: string | null }>(secondResponse);
+    assert.equal(second.items.length, 1);
+    assert.equal(second.nextCursor, null);
+    assert.deepEqual(new Set([first.items[0]!.id, second.items[0]!.id]), new Set(matches));
+    assert.equal((await fetch(`${baseUrl}/api/v1/patients?query=search&limit=21`, { headers: authHeaders('ADMIN') })).status, 400);
   });
 
   test('admin can search patients while coordinator and patient roles are forbidden', async () => {
@@ -307,7 +330,7 @@ describe('T-104b case routes', () => {
   test('decline care returns conflict for a closed case', async () => {
     const created = await postCase('DOCTOR_A', caseBody(providerAId, true));
     const id = (await responseJson<{ case: { id: string } }>(created)).case.id;
-    await prisma.screeningCase.update({ where: { id }, data: { state: 'CLOSED', closureReason: 'PATIENT_DECLINED', closedAt: clock.now() } });
+    await prisma.screeningCase.update({ where: { id }, data: { state: 'CLOSED', closureReason: 'PATIENT_DECLINED', closedAt: clock.now(), dueAt: null, ownerUserId: null, ownerQueueRole: null, ownerQueueProviderId: null } });
     const response = await fetch(`${baseUrl}/api/v1/cases/${id}/decline-care`, {
       method: 'POST', headers: { ...authHeaders('PATIENT'), 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Synthetic preference.' }),
     });

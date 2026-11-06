@@ -55,6 +55,26 @@ describe('attention engine rules', () => {
     expect(result.reasons[0]?.code).toBe('UNASSIGNED');
     expect(result.suggestedAction).toBe('Assign a doctor or coordinator and set a due date.');
   });
+  it('keeps the specified plain-language reason and separate action for each rule', () => {
+    const future = new Date(now.getTime() + 86_400_000);
+    const cases: Array<{ code: string; input: Partial<AttentionSnapshot>; at?: Date; text: string; action: string }> = [
+      { code: 'UNASSIGNED', input: { ownerUserId: null }, text: 'This case has no owner assigned and has not been accepted into the workflow queue.', action: 'Assign a doctor or coordinator and set a due date.' },
+      { code: 'NOTIFICATION_UNACKNOWLEDGED', input: { notifiedAt: new Date(now.getTime() - 100 * 3600000) }, text: 'The patient has not acknowledged the update within the configured time window.', action: 'Send a reminder and check that the patient can be reached.' },
+      { code: 'REFERRAL_PENDING', input: { state: 'REFERRAL_PENDING', urgency: 'URGENT', dueAt: future, currentReferral: { status: 'PENDING', createdAt: now, respondedAt: null } }, at: new Date(future.getTime() + 1), text: 'This referral has been pending longer than the configured service time.', action: 'Follow up with the receiving provider or reassign the referral.' },
+      { code: 'REJECTED_REFERRAL_NOT_REASSIGNED', input: { state: 'REFERRAL_PENDING', urgency: 'URGENT', dueAt: future, currentReferral: { status: 'REJECTED', createdAt: now, respondedAt: now } }, at: new Date(now.getTime() + 4 * 3600000 + 1), text: 'A provider rejected this referral and it has not been reassigned.', action: 'Reassign the referral to another provider.' },
+      { code: 'APPOINTMENT_OVERDUE_OR_MISSED', input: { state: 'APPOINTMENT_SCHEDULED', urgency: 'URGENT', dueAt: future, currentAppointment: { status: 'MISSED', scheduledAt: now } }, text: 'The appointment is overdue or was missed and no recovery step is recorded.', action: 'Record the outcome, reschedule, or escalate.' },
+      { code: 'FOLLOW_UP_DEADLINE_MISSED', input: { state: 'CARE_STARTED', urgency: 'URGENT', dueAt: future, followUp: { dueAt: new Date(now.getTime() - 1), status: 'OPEN' } }, text: 'A required follow-up is past due and still open.', action: 'Reassign the follow-up or escalate.' },
+      { code: 'REPEATED_UNREACHABLE', input: { urgency: 'URGENT', dueAt: future, failedContactAttempts: 3 }, text: 'Repeated attempts to reach the patient have failed.', action: 'Escalate and document the contact attempts.' },
+      { code: 'UNANSWERED_CONSULT', input: { urgency: 'ROUTINE', dueAt: future, openConsultAgeMs: 30 * 3600000 }, text: 'A consultation request has not been answered in time.', action: 'Ask a clinician to respond.' },
+      { code: 'GENERIC_STATE_SLA_BREACH', input: { urgency: 'URGENT', dueAt: new Date(now.getTime() - 1) }, text: 'This case is past its due date for its current step.', action: 'Complete or escalate the current step.' },
+    ];
+    for (const item of cases) {
+      const result = computeAttention(snapshot(item.input), item.at ?? now);
+      const reason = result.reasons.find((candidate) => candidate.code === item.code);
+      expect(reason?.text, item.code).toBe(item.text);
+      expect(result.suggestedAction, item.code).toBe(item.action);
+    }
+  });
   it('caps overdue bonus at four periods', () => {
     const s = snapshot({ state: 'REFERRAL_PENDING', urgency: 'URGENT', dueAt: new Date(now.getTime() - 96 * 3600000), currentReferral: { status: 'PENDING', createdAt: now, respondedAt: null } });
     expect(computeAttention(s, now).reasons.find((r) => r.code === 'OVERDUE_PERIOD_BONUS')?.points).toBe(40);
