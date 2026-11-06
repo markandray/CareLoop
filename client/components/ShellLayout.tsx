@@ -7,6 +7,7 @@ import type { Role } from '@careloop/shared';
 import { useSession } from '../lib/session';
 import { getProviderName } from '../lib/providers';
 import { PatientLanguageToggle } from '../lib/i18n/context';
+import { useT } from '../lib/i18n/context';
 import { DemoClockBanner } from './DemoClockBanner';
 
 interface NavItem {
@@ -18,7 +19,7 @@ interface NavItem {
 const ROLE_NAV_ITEMS: Record<Role, NavItem[]> = {
   PATIENT: [
     { label: 'Cases & Care Status', href: '/patient' },
-    { label: 'Notifications', href: '/patient/notifications', isPlanned: true },
+    { label: 'Notifications', href: '/patient/notifications' },
     { label: 'Data Consent', href: '/patient/consent', isPlanned: true },
     { label: 'Clinical Consults', href: '/patient/consults', isPlanned: true },
   ],
@@ -51,6 +52,7 @@ export function ShellLayout({
   headerAction?: React.ReactNode;
 }) {
   const { user, logout } = useSession();
+  const { t } = useT();
   const pathname = usePathname();
   const [providerName, setProviderName] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -158,12 +160,17 @@ export function ShellLayout({
             </p>
             <nav className="space-y-1">
               {navItems.map((item) => {
-                const isActive = pathname === item.href;
+                const isActive = pathname === item.href || (item.href === '/patient' && pathname.startsWith('/patient/cases/'));
+                const label = user.role === 'PATIENT' && item.href === '/patient'
+                  ? t('nav_casesAndTracker')
+                  : user.role === 'PATIENT' && item.href === '/patient/notifications'
+                    ? t('nav_notifications')
+                    : item.label;
                 return (
                   <div key={item.href}>
                     {item.isPlanned ? (
                       <div className="flex items-center justify-between rounded-lg ps-3 pe-3 py-2 text-sm font-medium text-slate-400 cursor-not-allowed">
-                        <span>{item.label}</span>
+                        <span>{label}</span>
                         <span className="text-[10px] uppercase font-semibold bg-slate-100 text-slate-500 rounded ps-1.5 pe-1.5 py-0.5">
                           Planned
                         </span>
@@ -177,7 +184,7 @@ export function ShellLayout({
                             : 'text-slate-700 hover:bg-slate-100'
                         }`}
                       >
-                        <span>{item.label}</span>
+                        <span>{label}</span>
                         {isActive && (
                           <span className="h-1.5 w-1.5 rounded-full bg-teal-600" />
                         )}
@@ -223,12 +230,17 @@ export function ShellLayout({
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-1">
                 {navItems.map((item) => {
-                  const isActive = pathname === item.href;
+                  const isActive = pathname === item.href || (item.href === '/patient' && pathname.startsWith('/patient/cases/'));
+                  const label = user.role === 'PATIENT' && item.href === '/patient'
+                    ? t('nav_casesAndTracker')
+                    : user.role === 'PATIENT' && item.href === '/patient/notifications'
+                      ? t('nav_notifications')
+                      : item.label;
                   return (
                     <div key={item.href}>
                       {item.isPlanned ? (
                         <div className="flex items-center justify-between rounded-lg ps-3 pe-3 py-2 text-sm font-medium text-slate-400">
-                          <span>{item.label}</span>
+                          <span>{label}</span>
                           <span className="text-[10px] uppercase font-semibold bg-slate-100 text-slate-500 rounded ps-1.5 pe-1.5 py-0.5">
                             Planned
                           </span>
@@ -243,7 +255,7 @@ export function ShellLayout({
                               : 'text-slate-700 hover:bg-slate-100'
                           }`}
                         >
-                          <span>{item.label}</span>
+                          <span>{label}</span>
                           {isActive && (
                             <span className="h-1.5 w-1.5 rounded-full bg-teal-600" />
                           )}
