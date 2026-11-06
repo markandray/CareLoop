@@ -1,16 +1,31 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { getRoleLandingRoute } from '../lib/auth';
+import { useSession } from '../lib/session';
+
 export default function Home() {
+  const { user, loading } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading) {
+      if (user) {
+        router.replace(getRoleLandingRoute(user.role));
+      } else {
+        router.replace('/login');
+      }
+    }
+  }, [user, loading, router]);
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6">
-      <p className="text-sm font-semibold uppercase tracking-widest text-teal-700">
-        CareLoop
-      </p>
-      <h1 className="mt-3 text-4xl font-bold">
-        Screening-to-care coordination
-      </h1>
-      <p className="mt-4 text-lg text-slate-600">
-        The prototype scaffold is running. Product workflows will be added in
-        later tasks.
-      </p>
-    </main>
+    <div className="flex min-h-screen items-center justify-center">
+      <div
+        role="status"
+        aria-label="Loading CareLoop"
+        className="h-8 w-8 animate-spin rounded-full border-4 border-teal-600 border-t-transparent"
+      />
+    </div>
   );
 }
