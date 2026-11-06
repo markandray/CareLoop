@@ -226,7 +226,8 @@ export function createCaseRouter(
       const caseId = caseIdParam(req);
       const result = await withTransaction(prisma, async (tx) => {
         const row = await tx.screeningCase.findFirst({ where: { id: caseId, patient: { is: { userId: req.user!.id } } }, select: { id: true, state: true, closureReason: true } });
-        if (!row || row.state === CaseState.CLOSED) throw AppError.notFound('Case not found.');
+        if (!row) throw AppError.notFound('Case not found.');
+        if (row.state === CaseState.CLOSED) throw AppError.conflict('Closed cases cannot record a care decline.');
         const prior = await tx.caseEvent.findFirst({ where: { caseId, type: CaseEventType.CARE_DECLINED_BY_PATIENT }, select: { id: true } });
         if (prior) throw AppError.conflict('Care has already been declined for this case.');
         const event = await appendEvent(tx, { caseId, type: CaseEventType.CARE_DECLINED_BY_PATIENT, actorType: ActorType.USER, actorId: req.user!.id, fromState: row.state, toState: row.state, payload: { reason: req.body.reason } }, clock);

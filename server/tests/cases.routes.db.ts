@@ -275,6 +275,56 @@ describe('T-104b case routes', () => {
     assert.equal(invalid.status, 400);
     assert.equal((await responseJson<{ error: { code: string } }>(invalid)).error.code, 'VALIDATION_ERROR');
   });
+
+  test('patient can decline care on their own case with event and audit but no state change', async () => {
+    const created = await postCase('DOCTOR_A', caseBody(providerAId, true));
+    const id = (await responseJson<{ case: { id: string; state: string } }>(created)).case.id;
+    const response = await fetch(`${baseUrl}/api/v1/cases/${id}/decline-care`, {
+      method: 'POST', headers: { ...authHeaders('PATIENT'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Synthetic preference.' }),
+    });
+    assert.equal(response.status, 200);
+    const body = await responseJson<{ event: { label: string } }>(response);
+    assert.ok(body.event.label);
+    const event = await prisma.caseEvent.findFirstOrThrow({ where: { caseId: id, type: 'CARE_DECLINED_BY_PATIENT' } });
+    assert.equal(event.fromState, 'NEW');
+    assert.equal(event.toState, 'NEW');
+    assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id }, select: { state: true } })).state, 'NEW');
+    assert.ok(await prisma.auditLog.findFirst({ where: { actorId: credentials.PATIENT.id, action: 'CARE_DECLINED_BY_PATIENT', entityType: 'ScreeningCase', entityId: id } }));
+  });
+
+  test('patient cannot decline care for another patient case', async () => {
+    const otherUser = await createUser('PATIENT', 'other-patient', null);
+    const otherPatient = await prisma.patient.create({ data: { userId: otherUser.id, syntheticMrn: `T104b-other-${suffix}`, dateOfBirth: new Date('1981-01-01T00:00:00.000Z') } });
+    const created = await postCase('DOCTOR_A', caseBody(providerAId, true, otherPatient.id));
+    const id = (await responseJson<{ case: { id: string } }>(created)).case.id;
+    const response = await fetch(`${baseUrl}/api/v1/cases/${id}/decline-care`, {
+      method: 'POST', headers: { ...authHeaders('PATIENT'), 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Synthetic preference.' }),
+    });
+    assert.equal(response.status, 404);
+  });
+
+  test('decline care returns conflict for a closed case', async () => {
+    const created = await postCase('DOCTOR_A', caseBody(providerAId, true));
+    const id = (await responseJson<{ case: { id: string } }>(created)).case.id;
+    await prisma.screeningCase.update({ where: { id }, data: { state: 'CLOSED', closureReason: 'PATIENT_DECLINED', closedAt: clock.now() } });
+    const response = await fetch(`${baseUrl}/api/v1/cases/${id}/decline-care`, {
+      method: 'POST', headers: { ...authHeaders('PATIENT'), 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Synthetic preference.' }),
+    });
+    assert.equal(response.status, 409);
+    assert.equal((await responseJson<{ error: { code: string } }>(response)).error.code, 'CONFLICT');
+  });
+
+  test('doctor and coordinator cannot use patient decline-care action', async () => {
+    const created = await postCase('DOCTOR_A', caseBody(providerAId, true));
+    const id = (await responseJson<{ case: { id: string } }>(created)).case.id;
+    for (const actor of ['DOCTOR_A', 'COORDINATOR'] as const) {
+      const response = await fetch(`${baseUrl}/api/v1/cases/${id}/decline-care`, {
+        method: 'POST', headers: { ...authHeaders(actor), 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Synthetic preference.' }),
+      });
+      assert.equal(response.status, 403, actor);
+    }
+  });
 });
 
 type ActorKey = keyof typeof credentials;
@@ -312,11 +362,11 @@ function authHeaders(actor: ActorKey): Record<string, string> {
   return { Cookie: `${AUTH_COOKIE_NAME}=${token}` };
 }
 
-function caseBody(originProviderId: string, assignDoctor = false) {
+function caseBody(originProviderId: string, assignDoctor = false, patient = patientId) {
   return {
     transitionKey: 'CREATE_CASE',
     evidence: {
-      patientId,
+      patientId: patient,
       originProviderId,
       pathway: 'Synthetic pathway',
       screeningType: 'Synthetic screening',
