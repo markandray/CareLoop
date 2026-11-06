@@ -17,6 +17,25 @@ The four role landing pages make live calls through relative `/api/v1/...` URLs.
 
 Record browser/date and any failures below after the owner completes this checklist.
 
+## T-302a — Read-only patient portal browser checklist
+
+Use the seeded English account `patient.en@careloop.local` and Arabic account `patient.ar@careloop.local` (the demo password is in README). For each account, inspect `/patient`, one open case detail, one closed case detail for each available closure reason, and `/patient/notifications`.
+
+1. Confirm the case list shows only case ID, patient status, next step, last update, and the case's notification badge; no owner, urgency, attention, escalation, actor, or staff identifiers appear.
+2. Open each case and verify the five tracker labels, correct current step, reason-specific closed status (especially declined and unreachable), approved explanation in the active language, Arabic review banner, separate untranslated doctor note, and the no-approved-explanation message when applicable.
+3. Verify referral provider and appointment date/time/location when present. Check the timeline uses only patient-safe event labels and Asia/Dubai timestamps; no payloads or staff names/IDs appear.
+4. Open notifications. Confirm localized text, sent/queued status, time, and a working link to the related case. Confirm there are no notification actions.
+5. At **360 px** and **1280 px**, check all three screens in **English and Arabic RTL** for clipping, horizontal page overflow, readable text, and visible focus. Confirm the Demo time banner remains visible when simulated time is active.
+6. Repeat the three screens by keyboard only: Tab/Shift+Tab through links and language controls; Enter to open a case and notification link; confirm route changes focus the page heading; confirm the current progress step is announced and loading/error changes are announced.
+
+**Contract limitation:** `NotificationDto` has no per-notification acknowledgement/read field, and the patient event projection does not include the notification ID. The list badge therefore counts SENT notifications for the matching case as a proxy; it cannot prove unread status. Acknowledgement actions are outside this read-only task.
+
+### T-302a implementation evidence and browser status
+
+Pure Vitest coverage in `client/tests/patient-portal.test.ts` covers every workflow state and closure reason, the reason-specific closed labels, English and Arabic Asia/Dubai formatting with Western digits, and locale direction/string parity. The existing class-scan and localization parity tests remain in the suite. On 2026-11-06, `npm run lint` passed, the root `npm run build` completed for the client, server, and shared workspace, and `npm test` passed 226/226 tests (12 files).
+
+The browser tool was available, but a live walkthrough of the new portal could not be completed. Before rebuilding, the browser authenticated the English demo patient and showed the older `/patient` screen; after the Compose client rebuild, the browser connection reset and could not reconnect to localhost. No claim is made that the current patient screens were visually verified. Complete the checklist above with both demo patients before accepting the responsive/RTL/keyboard browser criteria.
+
 T-301 verification evidence (2026-11-06): `npm run lint` passed; the production-configured root `npm run build` passed for client, server, and shared; `npm test` passed 205/205; `npm run test:db` passed 177/177. The production build used `NEXT_PUBLIC_DEMO_MODE=false` with `NEXT_PUBLIC_DEMO_PASSWORD` unset, and a fixed-string scan of `client/.next` found no demo password. A scan for the specified direction-sensitive spacing and text alignment utility patterns returned no matches in client TypeScript sources. Live Compose checks returned 401 JSON for unauthenticated `/api/v1/auth/me`, and 200 with `Set-Cookie: careloop_session` for login through `/api/v1/auth/login` with the matching client Origin. Route curl checks returned 307 to `/login` for all four role pages without a cookie; each seeded role login returned 200, and each of its three other role pages returned 307 to its own landing route. Browser verification confirmed the demo login panel, unauthenticated redirect, demo-admin login, live dashboard counts, and simulated Demo time banner. The remaining manual checklist items (logout, rate-limit message, Arabic toggle, and 360 px / 1280 px layouts) remain for owner visual review.
 
 ## T-102 — Core clock, event log, and audit

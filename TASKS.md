@@ -158,6 +158,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: case list, status tracker, plain-language explanation, next step, "I understand" button, notifications, referral/appointment status, consult request.
 - Accept: works in English and Arabic; no clinical jargon in notifications; mobile-responsive.
 
+#### [ ] T-302a Read-only patient portal screens
+- Agent: Codex. Depends: T-301, T-203
+- Output: patient case cards, safe case detail/progress, read-only notification center, Dubai date formatting, keyboard and announcement accessibility.
+- Evidence (2026-11-06): implemented and committed on `task/T-302a-patient-portal` in steps 1-6 (`120e529`, `5261d14`, `8e6281e`, `76b7a15`, `8096133`, `77e21c2`). `npm run lint` passes, root `npm run build` completes, and `npm test` passes 226/226 (12 files). Pure tests cover every workflow state/closure reason, closed labels, EN/AR Dubai time with Western digits, and locale parity. No server or shared contract changes. Live browser review of the new screens did not complete: rebuilding the Compose client reset the browser connection. Follow the T-302a checklist in docs/07 for English/Arabic, 360/1280 px, RTL, and keyboard verification before marking complete.
+
 ### [ ] T-303 Doctor dashboard
 - Agent: Antigravity. Depends: T-301, T-105, T-201
 - Output: worklist, case detail, approve summary/next step/urgency, create referral, accept/reject incoming referral, answer consults, sign off closures.
