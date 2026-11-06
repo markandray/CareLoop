@@ -78,6 +78,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: authenticated case create/list/detail/event routes and HTTP integration tests.
 - Evidence (2026-11-03): added strict shared-schema routes under `/api/v1/cases`, mounted behind authentication, and added Compose DB HTTP tests. The tests also exposed and fixed Express 5 query getter mutation in validation middleware. See the T-104 evidence above for commands and live curl results.
 
+#### [x] T-104c Patient search and patient-safe operational copy
+- Agent: Codex. Branch: `task/T-104c-patients-and-copy`.
+- Output: audited DOCTOR/ADMIN synthetic patient search, attention reason/action copy split, decline-care HTTP regressions, and a staged stuck-demo escalation regression.
+- Evidence (2026-11-06): `npm run lint`, root `npm run build`, and `npm test` pass (208/208). Two consecutive `npm run test:db` runs pass (195/195 each). Added provider-scoped role denial, safe DTO/audit, stable cursor/page-size, patient decline, attention-copy, and staged demo timeline coverage. Patient registration is out of scope; patient records originate from the synthetic screening feed. See docs/07 for test names.
+
 ### [x] T-105 Case transitions endpoint
 - Agent: Codex. Depends: T-103, T-104
 - Output: `POST /cases/:id/transitions` applying the state machine, setting owner and `dueAt` from SLA config, writing events.

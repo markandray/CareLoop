@@ -224,3 +224,13 @@ The named database scenarios are in `server/tests/demo-seed.db.ts`:
 - `demo seed prints the stuck case identifier and a fourteen-case summary`
 
 Reset guard scenarios are in `server/tests/demo-reset.db.ts`: `demo reset guard refuses without ALLOW_DEMO_RESET`, `demo reset guard refuses production even if explicitly enabled`, and `demo reset reports the configured database name`. Test evidence and any live reset/curl output are recorded in the current T-703a Progress log in `AGENTS.md`.
+
+## T-104c — Patient search, safe attention copy, and demo escalation timeline
+
+Attention-copy unit scenarios in `server/tests/attentionEngine.test.ts` include `uses a neutral action when only the urgent timer rule applies`, `uses the action belonging to the highest-scoring reason`, `keeps the specified plain-language reason and separate action for each rule`, and `keeps every attention reason and action digit-free and free of denylisted clinical terms`.
+
+The named HTTP DB scenarios in `server/tests/cases.routes.db.ts` are `patient search returns only the approved DTO fields and writes PATIENT_SEARCH audit`, `patient search uses stable cursor pages and caps page size at twenty`, `admin can search patients while coordinator and patient roles are forbidden`, `patient search requires authentication and at least two query characters`, `patient can decline care on their own case with event and audit but no state change`, `patient cannot decline care for another patient case`, `decline care returns conflict for a closed case`, and `doctor and coordinator cannot use patient decline-care action`.
+
+`stuck demo case reaches MEDIUM at 25 hours, HIGH at 72 hours, and LEVEL_3 at 96 hours` in `server/tests/demo-seed.db.ts` runs the actual HTTP seed against the test database, advances the injected clock, and runs the escalation sweep at each point. It asserts scores 45 and 65 with LEVEL_1 and LEVEL_2 respectively, then LEVEL_3 at 96 hours.
+
+Verification (2026-11-06): `npm run lint` passes, root `npm run build` passes for client/server/shared, `npm test` passes 208/208, and two consecutive `npm run test:db` runs each pass 195/195 with zero failures.
