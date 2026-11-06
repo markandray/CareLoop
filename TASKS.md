@@ -235,6 +235,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Agent: Antigravity
 - Accept: keyboard navigation on main flows, contrast ok, Arabic layout reviewed.
 
+### [ ] T-506 Remaining documented API routes
+- Agent: Codex. Depends: T-105, T-306.
+- Output: implement the remaining case evidence, confirmatory-result recording, closure-proposal, admin config, and admin audit-log routes after the owner confirms their request/response contracts.
+- Evidence (2026-11-06): docs/05 route audit marks these paths Planned (T-506); no code changed in the documentation-status task.
+
 ---
 
 ## Phase 6 — Technical documentation (Days 17-18). Most files should already be drafted.
@@ -242,6 +247,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 ### [ ] T-601 Finalize docs 02-07 and 09
 - Agent: Codex/Claude (draft) -> Owner (edit and own)
 - Accept: architecture diagram, ER diagram, API reference matches code, test evidence and simulation results pasted into 07, setup steps verified.
+
+#### [x] T-601a API route status reconciliation
+- Agent: Codex. Branch: `task/docs-05-status`.
+- Output: inventory mounted server routes, add implemented/planned status to every endpoint table in docs/05, remove unmounted patient routes, and reconcile implemented route details.
+- Evidence (2026-11-06): docs/05 contains 54 endpoint rows: 39 Implemented and 15 Planned, with planned rows linked to T-202, T-204, T-403, T-404, or T-506. No code changed.
 
 ### [ ] T-602 Finalize doc 08 (assumptions, dependencies, limitations)
 - Agent: Owner with Claude review
