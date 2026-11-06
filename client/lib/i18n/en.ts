@@ -101,3 +101,4 @@ export const en = {
 
 export type TranslationKey = keyof typeof en;
 export type Translations = Record<TranslationKey, string>;
+

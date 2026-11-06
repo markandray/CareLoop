@@ -100,3 +100,4 @@ export const ar: Translations = {
     'المحتوى المترجم إلى العربية ناتج عن ترجمة آلية ولم يخضع للمراجعة السريرية.',
   reviewNotice_dismiss: 'إغلاق',
 };
+

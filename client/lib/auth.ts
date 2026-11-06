@@ -20,3 +20,4 @@ export function isRoleAllowedOnPath(role: Role, pathname: string): boolean {
   if (pathname.startsWith('/admin')) return role === 'ADMIN';
   return true;
 }
+

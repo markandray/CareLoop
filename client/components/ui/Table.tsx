@@ -37,3 +37,4 @@ export function Table({
     </div>
   );
 }
+

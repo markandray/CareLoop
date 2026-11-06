@@ -49,3 +49,4 @@ export function StateBadge({
 
   return <Badge variant={variant}>{label || state}</Badge>;
 }
+
