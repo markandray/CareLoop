@@ -71,6 +71,10 @@ export function ShellLayout({
     };
   }, [user?.providerId]);
 
+  useEffect(() => {
+    document.querySelector<HTMLElement>('main h1[tabindex="-1"]')?.focus();
+  }, [pathname]);
+
   if (!user) {
     return <>{children}</>;
   }

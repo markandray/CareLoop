@@ -68,7 +68,7 @@ function PatientDashboard() {
       <div className="space-y-6">
         <ReviewNoticeBanner />
         <header>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t('patient_casesTitle')}</h1>
+          <h1 tabIndex={-1} className="text-2xl font-bold tracking-tight text-slate-900">{t('patient_casesTitle')}</h1>
           <p className="mt-1 text-sm text-slate-600">{t('patient_casesIntro')}</p>
         </header>
         {error && <ErrorBanner title={t('errorTitle')} message={t('patient_casesError')} />}

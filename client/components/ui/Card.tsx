@@ -6,6 +6,7 @@ export interface CardProps
   subtitle?: React.ReactNode;
   headerAction?: React.ReactNode;
   footer?: React.ReactNode;
+  headingLevel?: 2 | 3;
 }
 
 export function Card({
@@ -13,10 +14,12 @@ export function Card({
   subtitle,
   headerAction,
   footer,
+  headingLevel = 3,
   className = '',
   children,
   ...props
 }: CardProps) {
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
   return (
     <div
       className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden ${className}`}
@@ -26,9 +29,9 @@ export function Card({
         <div className="ps-5 pe-5 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
           <div>
             {title && (
-              <h3 className="text-base font-semibold text-slate-900 leading-tight">
+              <Heading className="text-base font-semibold text-slate-900 leading-tight">
                 {title}
-              </h3>
+              </Heading>
             )}
             {subtitle && (
               <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>

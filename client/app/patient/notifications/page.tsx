@@ -43,7 +43,7 @@ function PatientNotifications() {
       <div className="space-y-6">
         <ReviewNoticeBanner />
         <header>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t('patient_notificationsTitle')}</h1>
+          <h1 tabIndex={-1} className="text-2xl font-bold tracking-tight text-slate-900">{t('patient_notificationsTitle')}</h1>
           <p className="mt-1 text-sm text-slate-600">{t('patient_notificationsIntro')}</p>
         </header>
         {error && <ErrorBanner title={t('errorTitle')} message={t('patient_notificationsError')} />}
@@ -57,7 +57,6 @@ function PatientNotifications() {
                   <p className="text-sm leading-6 text-slate-800">{notification.text}</p>
                   <span className="rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-800">{t(`patient_notificationStatus_${notification.status}`)}</span>
                 </div>
-                {notification.reviewNotice === 'UNREVIEWED_TRANSLATION' && <ReviewNoticeBanner forceShow />}
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
                   <time className="text-xs text-slate-600" dateTime={notification.sentAt ?? notification.createdAt}>{formatPatientDateTime(notification.sentAt ?? notification.createdAt, language)}</time>
                   <Link href={`/patient/cases/${encodeURIComponent(notification.caseId)}`} className="text-sm font-medium text-teal-800 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">{t('patient_openCase')} {notification.caseId}</Link>
