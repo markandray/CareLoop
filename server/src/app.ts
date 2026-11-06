@@ -22,6 +22,7 @@ import { createAppointmentRouter } from './modules/referrals/appointmentRoutes';
 import { createNotificationRouter } from './modules/notifications/notificationRoutes';
 import { createAttentionRouter } from './modules/attention/attentionRoutes';
 import { createEscalationRouter } from './modules/escalation/escalationRoutes';
+import { createPatientRouter } from './modules/patients/patientRoutes';
 
 export interface AppContext {
   prisma: PrismaClient;
@@ -74,6 +75,7 @@ export function createApp(
   apiV1Router.use('/', createAttentionRouter(prisma, clock, authenticate));
   apiV1Router.use('/', createEscalationRouter(prisma, clock, env, authenticate));
   apiV1Router.use('/cases', createContactAttemptRouter(prisma, clock, authenticate));
+  apiV1Router.use('/patients', createPatientRouter(prisma, clock, authenticate));
   apiV1Router.use('/patients', createConsentRouter(prisma, clock, authenticate));
   apiV1Router.use('/providers', createProviderRouter(prisma, clock, authenticate));
   apiV1Router.use('/referrals', createReferralRouter(prisma, clock, authenticate));

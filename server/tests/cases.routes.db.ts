@@ -253,6 +253,28 @@ describe('T-104b case routes', () => {
     });
     assert.ok(audit);
   });
+
+  test('patient search returns only the approved DTO fields and writes PATIENT_SEARCH audit', async () => {
+    const response = await fetch(`${baseUrl}/api/v1/patients?query=t104b`, { headers: authHeaders('DOCTOR_A') });
+    assert.equal(response.status, 200);
+    const body = await responseJson<{ items: Array<Record<string, unknown>> }>(response);
+    assert.ok(body.items.some((item) => item.id === patientId));
+    for (const item of body.items) assert.deepEqual(Object.keys(item).sort(), ['displayName', 'id', 'preferredLanguage', 'syntheticMrn']);
+    assert.ok(await prisma.auditLog.findFirst({ where: { actorId: credentials.DOCTOR_A.id, action: 'PATIENT_SEARCH', entityType: 'Patient', entityId: credentials.DOCTOR_A.id } }));
+  });
+
+  test('admin can search patients while coordinator and patient roles are forbidden', async () => {
+    assert.equal((await fetch(`${baseUrl}/api/v1/patients?query=t104b`, { headers: authHeaders('ADMIN') })).status, 200);
+    assert.equal((await fetch(`${baseUrl}/api/v1/patients?query=t104b`, { headers: authHeaders('COORDINATOR') })).status, 403);
+    assert.equal((await fetch(`${baseUrl}/api/v1/patients?query=t104b`, { headers: authHeaders('PATIENT') })).status, 403);
+  });
+
+  test('patient search requires authentication and at least two query characters', async () => {
+    assert.equal((await fetch(`${baseUrl}/api/v1/patients?query=t104b`)).status, 401);
+    const invalid = await fetch(`${baseUrl}/api/v1/patients?query=t`, { headers: authHeaders('ADMIN') });
+    assert.equal(invalid.status, 400);
+    assert.equal((await responseJson<{ error: { code: string } }>(invalid)).error.code, 'VALIDATION_ERROR');
+  });
 });
 
 type ActorKey = keyof typeof credentials;

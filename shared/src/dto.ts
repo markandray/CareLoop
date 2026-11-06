@@ -37,15 +37,12 @@ import {
 const StrictObject = <T extends z.ZodRawShape>(shape: T) =>
   z.object(shape).strict();
 
-export const CreatePatientRequestSchema = StrictObject({
-  email: z.string().email().max(320),
-  name: z.string().trim().min(1).max(160),
-  syntheticMrn: z.string().trim().min(1).max(100),
-  dateOfBirth: DateOnlySchema,
-  preferredLanguage: LanguageSchema.default('EN'),
-  preferredChannel: ContactChannelSchema.default('PORTAL'),
+export const PatientSearchQuerySchema = StrictObject({
+  query: z.string().trim().min(2).max(120),
+  cursor: CursorQuerySchema.shape.cursor,
+  limit: z.coerce.number().int().min(1).max(20).default(20),
 });
-export type CreatePatientRequest = z.infer<typeof CreatePatientRequestSchema>;
+export type PatientSearchQuery = z.infer<typeof PatientSearchQuerySchema>;
 
 export const UpdatePatientProfileRequestSchema = StrictObject({
   preferredLanguage: LanguageSchema.optional(),
@@ -95,6 +92,16 @@ export const PatientSummarySchema = StrictObject({
 });
 export type PatientSummary = z.infer<typeof PatientSummarySchema>;
 
+export const PatientSearchResultSchema = StrictObject({
+  id: UuidSchema,
+  displayName: z.string(),
+  syntheticMrn: z.string(),
+  preferredLanguage: LanguageSchema,
+});
+export type PatientSearchResult = z.infer<typeof PatientSearchResultSchema>;
+export const PatientSearchPageSchema = makeCursorPageSchema(PatientSearchResultSchema);
+export type PatientSearchPage = z.infer<typeof PatientSearchPageSchema>;
+
 export const CaseOwnerSchema = z.discriminatedUnion('kind', [
   StrictObject({
     kind: z.literal('USER'),
@@ -123,13 +130,6 @@ export const ProviderStaffDtoSchema = StrictObject({
   role: RoleSchema,
 });
 export type ProviderStaffDto = z.infer<typeof ProviderStaffDtoSchema>;
-
-export const CreatePatientResponseSchema = StrictObject({
-  patient: PatientProfileSchema,
-  user: UserSessionSchema,
-  temporaryPassword: z.string().min(8),
-});
-export type CreatePatientResponse = z.infer<typeof CreatePatientResponseSchema>;
 
 export const ReviewDraftDtoSchema = StrictObject({
   resultCategoryCode: z.string(),

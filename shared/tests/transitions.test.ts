@@ -6,7 +6,6 @@ import {
   CaseEventDtoStaffSchema,
   CaseListQuerySchema,
   CreateCaseRequestSchema,
-  CreatePatientRequestSchema,
   CoordinatorEvidenceDtoSchema,
   GenerateExplanationsRequestSchema,
   ProviderStaffDtoSchema,
@@ -301,7 +300,7 @@ describe('transition API contract', () => {
     },
   );
 
-  it('validates review, explanation, patient creation, follow-up and list request shapes', () => {
+  it('validates review, explanation, follow-up and list request shapes', () => {
     expect(
       ReviewDraftRequestSchema.safeParse({
         resultCategoryCode: 'FOLLOW_UP_NEEDED',
@@ -311,14 +310,6 @@ describe('transition API contract', () => {
       }).success,
     ).toBe(true);
     expect(GenerateExplanationsRequestSchema.safeParse({}).success).toBe(true);
-    expect(
-      CreatePatientRequestSchema.safeParse({
-        email: 'patient@example.test',
-        name: 'Synthetic Patient',
-        syntheticMrn: 'SYN-1001',
-        dateOfBirth: '1990-01-01',
-      }).success,
-    ).toBe(true);
     expect(
       UpdateFollowUpRequestSchema.safeParse({ status: 'COMPLETED' }).success,
     ).toBe(true);
