@@ -1,167 +1,104 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   type CaseCursorPage,
+  type CaseDetailPatient,
+  type NotificationCursorPage,
   CaseCursorPageSchema,
+  CaseDetailPatientSchema,
+  NotificationCursorPageSchema,
 } from '@careloop/shared';
 import { apiFetch } from '../../lib/api';
-import { RoleGuard, useSession } from '../../lib/session';
+import { RoleGuard } from '../../lib/session';
 import { useT } from '../../lib/i18n/context';
 import { ShellLayout } from '../../components/ShellLayout';
 import { ReviewNoticeBanner } from '../../components/ReviewNoticeBanner';
-import {
-  Card,
-  StateBadge,
-  Spinner,
-  EmptyState,
-  ErrorBanner,
-  Table,
-} from '../../components/ui';
+import { Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
 
 function PatientDashboard() {
-  const { user } = useSession();
-  const { t } = useT();
-  const [data, setData] = useState<CaseCursorPage | null>(null);
+  const { t, language } = useT();
+  const [cases, setCases] = useState<CaseDetailPatient[] | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-    const loadCases = async () => {
+    const load = async () => {
       try {
         setLoading(true);
-        const res = await apiFetch<CaseCursorPage>('/api/v1/cases', {
-          method: 'GET',
-          schema: CaseCursorPageSchema,
-        });
+        const [casePage, notifications] = await Promise.all([
+          apiFetch<CaseCursorPage>('/api/v1/cases?limit=100', {
+            method: 'GET', schema: CaseCursorPageSchema,
+          }),
+          apiFetch<NotificationCursorPage>('/api/v1/notifications?limit=100', {
+            method: 'GET', schema: NotificationCursorPageSchema,
+          }),
+        ]);
+        const details = await Promise.all(casePage.items.map((item) =>
+          apiFetch<CaseDetailPatient>(`/api/v1/cases/${encodeURIComponent(item.id)}`, {
+            method: 'GET', schema: CaseDetailPatientSchema,
+          }),
+        ));
         if (isMounted) {
-          setData(res);
-          setError(null);
+          setCases(details);
+          // The API has no per-notification read flag. SENT is the available proxy
+          // until acknowledgement state is exposed by the contract.
+          setUnreadCount(notifications.items.filter((item) => item.status === 'SENT').length);
+          setError(false);
         }
-      } catch (err: unknown) {
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Failed to load cases');
-        }
+      } catch {
+        if (isMounted) setError(true);
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
-
-    void loadCases();
-    return () => {
-      isMounted = false;
-    };
+    void load();
+    return () => { isMounted = false; };
   }, []);
 
   return (
     <ShellLayout>
       <div className="space-y-6">
         <ReviewNoticeBanner />
-
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            {t('landing_welcome')}, {user?.name}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {t('landing_patientPortalNotice')}
-          </p>
-        </div>
-
-        {error && <ErrorBanner message={error} />}
-
-        {/* Identity & Live Count Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card title={t('landing_sessionTitle')}>
-            <dl className="space-y-2 text-xs">
-              <div className="flex justify-between">
-                <dt className="text-slate-500">{t('emailLabel')}:</dt>
-                <dd className="font-semibold text-slate-800">{user?.email}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-slate-500">{t('role')}:</dt>
-                <dd className="font-semibold text-slate-800">{user?.role}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-slate-500">{t('language')}:</dt>
-                <dd className="font-semibold text-slate-800">{user?.language}</dd>
-              </div>
-            </dl>
-          </Card>
-
-          <Card title={t('landing_casesCount')}>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-teal-800">
-                {loading ? '...' : (data?.items.length ?? 0)}
-              </span>
-              <span className="text-xs text-slate-500">active case(s)</span>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              Personal patient records scoped strictly to your identity.
-            </p>
-          </Card>
-
-          <Card title="API Status">
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              <span className="text-xs font-semibold text-emerald-800">
-                {t('landing_apiConnected')}
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              Endpoint: <code className="bg-slate-100 rounded ps-1 pe-1 py-0.5">/api/v1/cases</code>
-            </p>
-          </Card>
-        </div>
-
-        {/* Live Cases Table */}
-        <div>
-          <h2 className="text-base font-semibold text-slate-900 mb-3">
-            {t('nav_casesAndTracker')}
-          </h2>
-
-          {loading ? (
-            <div className="flex justify-center py-12 bg-white rounded-xl border border-slate-200">
-              <Spinner label={t('loading')} />
-            </div>
-          ) : data && data.items.length > 0 ? (
-            <Table headers={['Case ID', 'Care Status', 'Created', 'Last Updated']}>
-              {data.items.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="ps-4 pe-4 py-3 font-semibold text-slate-900">
-                    {item.id}
-                  </td>
-                  <td className="ps-4 pe-4 py-3">
-                    <StateBadge state={item.state} patientFriendly={true} />
-                  </td>
-                  <td className="ps-4 pe-4 py-3 text-slate-500">
-                    {new Date(item.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="ps-4 pe-4 py-3 text-slate-500">
-                    {new Date(item.updatedAt).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </Table>
-          ) : (
-            <EmptyState
-              title={t('landing_noCasesFound')}
-              description="No screening cases have been registered for your account yet."
-            />
-          )}
-        </div>
+        <header>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t('patient_casesTitle')}</h1>
+          <p className="mt-1 text-sm text-slate-600">{t('patient_casesIntro')}</p>
+        </header>
+        {error && <ErrorBanner title={t('errorTitle')} message={t('patient_casesError')} />}
+        {loading ? (
+          <div aria-live="polite" className="flex justify-center rounded-xl border border-slate-200 bg-white py-12">
+            <Spinner label={t('loading')} />
+          </div>
+        ) : cases?.length ? (
+          <section aria-label={t('patient_casesTitle')} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {cases.map((item) => (
+              <Link key={item.id} href={`/patient/cases/${encodeURIComponent(item.id)}`} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">
+                <Card className="h-full transition-shadow hover:shadow-md">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <h2 className="text-lg font-semibold text-slate-900">{item.id}</h2>
+                    {unreadCount > 0 && <span className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-900"><span>{unreadCount}</span> {t('patient_unreadBadge')}</span>}
+                  </div>
+                  <p className="mt-2 inline-flex rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-800">{t(`patient_status_${item.state}`)}</p>
+                  <div className="mt-4">
+                    <h3 className="text-sm font-semibold text-slate-800">{t('patient_nextStep')}</h3>
+                    <p className="mt-1 text-sm text-slate-700">{item.recommendedNextStep ?? item.statusDescription}</p>
+                  </div>
+                  <p className="mt-4 text-xs text-slate-600">{t('patient_lastUpdate')}: <time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleString(language === 'AR' ? 'ar' : 'en')}</time></p>
+                </Card>
+              </Link>
+            ))}
+          </section>
+        ) : (
+          <EmptyState title={t('patient_noCases')} description={t('patient_noCasesDescription')} />
+        )}
       </div>
     </ShellLayout>
   );
 }
 
 export default function PatientPage() {
-  return (
-    <RoleGuard allowedRole="PATIENT">
-      <PatientDashboard />
-    </RoleGuard>
-  );
+  return <RoleGuard allowedRole="PATIENT"><PatientDashboard /></RoleGuard>;
 }
-

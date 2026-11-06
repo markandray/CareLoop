@@ -93,6 +93,15 @@ export const ar: Translations = {
   landing_noCasesFound: 'لا توجد حالات حالياً',
   landing_patientPortalNotice:
     'يتم عرض حالات الفحص النشطة وحالة تنسيق الرعاية الخاصة بك أدناه.',
+  patient_casesTitle: 'حالاتك',
+  patient_casesIntro: 'اطّلع على الحالة الحالية والخطوة التالية لكل حالة فحص.',
+  patient_nextStep: 'الخطوة التالية',
+  patient_lastUpdate: 'آخر تحديث',
+  patient_unreadBadge: 'إشعارات جديدة',
+  patient_noCases: 'لا توجد حالات بعد',
+  patient_noCasesDescription: 'لا توجد حالات فحص مرتبطة بحسابك.',
+  patient_casesError: 'تعذر تحميل حالاتك. يرجى المحاولة لاحقاً.',
+  errorTitle: 'حدث خطأ',
 
   // Review notice
   reviewNotice_title: 'تنبيه',

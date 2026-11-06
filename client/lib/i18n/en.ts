@@ -91,6 +91,15 @@ export const en = {
   landing_noCasesFound: 'No cases found',
   landing_patientPortalNotice:
     'Your active screening cases and care coordination status are shown below.',
+  patient_casesTitle: 'Your cases',
+  patient_casesIntro: 'See the current status and next step for each screening case.',
+  patient_nextStep: 'Next step',
+  patient_lastUpdate: 'Last updated',
+  patient_unreadBadge: 'new notifications',
+  patient_noCases: 'No cases yet',
+  patient_noCasesDescription: 'There are no screening cases linked to your account.',
+  patient_casesError: 'We could not load your cases. Please try again later.',
+  errorTitle: 'Something went wrong',
 
   // Review notice
   reviewNotice_title: 'Notice',
