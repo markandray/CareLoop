@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import type { Role } from '@careloop/shared';
 import { useSession } from '../lib/session';
 import { getProviderName } from '../lib/providers';
+import { PatientLanguageToggle } from '../lib/i18n/context';
 import { DemoClockBanner } from './DemoClockBanner';
 
 interface NavItem {
@@ -118,6 +119,7 @@ export function ShellLayout({
 
           {/* User info, actions and logout */}
           <div className="flex items-center gap-2 sm:gap-4">
+            <PatientLanguageToggle />
             {headerAction}
 
             <div className="hidden sm:flex flex-col text-end">
