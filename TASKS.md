@@ -142,10 +142,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 
 ## Phase 3 — Frontend (Days 9-11). Starts after T-003 is approved; can begin on mocked data earlier.
 
-### [ ] T-301 App shell, login, role routing, i18n and RTL
+### [x] T-301 App shell, login, role routing, i18n and RTL
 - Agent: Antigravity. Depends: T-003, T-101
 - Output: login page, role-based routes/layout, en/ar switching with proper RTL, shared UI components.
 - Accept: each role lands on its own area; unauthorized routes redirect; Arabic renders RTL without layout breakage (screenshots).
+- Evidence (2026-11-06): completed on `task/T-301-app-shell`, preserving commits `e162da9` through `da13910` and WIP commit `945217a`. Added inferred shared `AttentionQueuePage`, corrected dashboard attention action fields, and made middleware query server-validated `/auth/me` before role-area redirects. Added frontend architecture, role login README instructions, demo-only limitation, and owner browser checklist. `npm run lint`, production-configured root `npm run build`, `npm test` (205/205), and `npm run test:db` (177/177) pass. Proxy, `Set-Cookie`, matching Origin, all missing-cookie redirects, and all cross-role redirects were curl-verified. Production `.next` has no demo password. Browser confirmed demo-admin login, live counts, and simulated clock banner; logout, rate-limit UI, Arabic toggle, and 360/1280 px visual checks remain on the owner checklist in docs/07.
 
 ### [ ] T-302 Patient portal
 - Agent: Antigravity. Depends: T-301, T-203

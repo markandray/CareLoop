@@ -158,7 +158,7 @@ function DoctorDashboard() {
                     {item.escalationLevel}
                   </td>
                   <td className="ps-4 pe-4 py-3 text-xs text-slate-700 max-w-xs truncate">
-                    {item.action}
+                    {item.suggestedAction}
                   </td>
                 </tr>
               ))}

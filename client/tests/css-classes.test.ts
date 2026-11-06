@@ -36,23 +36,25 @@ describe('CSS class directionality guard', () => {
     expect(files.length).toBeGreaterThan(10);
   });
 
+  // Build direction-sensitive class patterns from parts so this guard does not
+  // match its own source when scanning all client TypeScript files.
   const bannedPatterns = [
-    /\bml-\S+/,
-    /\bmr-\S+/,
-    /\bpl-\S+/,
-    /\bpr-\S+/,
-    /\btext-left\b/,
-    /\btext-right\b/,
-    /\bleft-\S+/,
-    /\bright-\S+/,
-    /\bborder-l\b/,
-    /\bborder-l-\S+/,
-    /\bborder-r\b/,
-    /\bborder-r-\S+/,
-    /\brounded-l\b/,
-    /\brounded-l-\S+/,
-    /\brounded-r\b/,
-    /\brounded-r-\S+/,
+    new RegExp(['\\b', 'm', 'l', '-', '\\S+'].join('')),
+    new RegExp(['\\b', 'm', 'r', '-', '\\S+'].join('')),
+    new RegExp(['\\b', 'p', 'l', '-', '\\S+'].join('')),
+    new RegExp(['\\b', 'p', 'r', '-', '\\S+'].join('')),
+    new RegExp(['\\b', 'text-', 'left', '\\b'].join('')),
+    new RegExp(['\\b', 'text-', 'right', '\\b'].join('')),
+    new RegExp(['\\b', 'left', '-', '\\S+'].join('')),
+    new RegExp(['\\b', 'right', '-', '\\S+'].join('')),
+    new RegExp(['\\b', 'border-', 'l', '\\b'].join('')),
+    new RegExp(['\\b', 'border-', 'l', '-', '\\S+'].join('')),
+    new RegExp(['\\b', 'border-', 'r', '\\b'].join('')),
+    new RegExp(['\\b', 'border-', 'r', '-', '\\S+'].join('')),
+    new RegExp(['\\b', 'rounded-', 'l', '\\b'].join('')),
+    new RegExp(['\\b', 'rounded-', 'l', '-', '\\S+'].join('')),
+    new RegExp(['\\b', 'rounded-', 'r', '\\b'].join('')),
+    new RegExp(['\\b', 'rounded-', 'r', '-', '\\S+'].join('')),
   ];
 
   files.forEach((file) => {
@@ -74,7 +76,7 @@ describe('CSS class directionality guard', () => {
       const classNameMatches = content.match(/className=(["'{`])(.*?)\1/g) || [];
       for (const clsMatch of classNameMatches) {
         expect(
-          /\b(left|right)\b/i.test(clsMatch),
+        new RegExp(['\\b(left', '|right)\\b'].join(''), 'i').test(clsMatch),
           `File ${relativePath} has prohibited directional word in className: "${clsMatch}"`
         ).toBe(false);
       }

@@ -39,7 +39,6 @@ services:
       context: .
       dockerfile: client/Dockerfile
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
       API_INTERNAL_URL: ${API_INTERNAL_URL:-http://server:4000}
       NEXT_PUBLIC_DEMO_MODE: ${NEXT_PUBLIC_DEMO_MODE:-true}
       NEXT_PUBLIC_DEMO_PASSWORD: ${NEXT_PUBLIC_DEMO_PASSWORD:-CareLoopDemo2026!}

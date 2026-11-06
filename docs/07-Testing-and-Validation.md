@@ -1,5 +1,24 @@
 # Testing and Validation
 
+## T-301 — Frontend shell and API proxy
+
+The four role landing pages make live calls through relative `/api/v1/...` URLs. The API proxy uses the Next.js rewrite configured by `API_INTERNAL_URL`; its response should preserve the server's `Set-Cookie` header. The existing server Origin middleware accepts same-origin browser writes from `http://localhost:3000` and rejects a mismatched Origin.
+
+### Owner browser verification checklist
+
+1. Open `/login`, sign in as each seeded PATIENT, DOCTOR, COORDINATOR, and ADMIN account from the README, and confirm the user lands on `/patient`, `/doctor`, `/coordinator`, or `/admin` respectively.
+2. In a private window with no `careloop_session` cookie, open each of `/patient`, `/doctor`, `/coordinator`, and `/admin`; confirm each redirects to `/login`.
+3. While signed in as each role, visit each of the other three role areas; confirm the browser redirects to that user's own landing page.
+4. Use the shell's Log out control; confirm it returns to `/login` and revisiting a protected route redirects to login.
+5. On login, submit an incorrect password five times for a test email/IP; confirm the inline `429 RATE_LIMITED` message is visible and does not reveal whether the account exists. Wait for the limiter window before using the same address again.
+6. Sign in as the Arabic patient, use the language toggle, and confirm the page changes to Arabic with `lang="ar"` and `dir="rtl"`; switch back to English and confirm `dir="ltr"`.
+7. In a simulated demo-clock session, confirm the shell shows the Demo time banner and its displayed time updates after the 30-second poll.
+8. At a 360 px viewport, check login and each role shell for horizontal overflow, reachable navigation, and visible controls. Repeat at 1280 px and confirm the desktop navigation and content layout.
+
+Record browser/date and any failures below after the owner completes this checklist.
+
+T-301 verification evidence (2026-11-06): `npm run lint` passed; the production-configured root `npm run build` passed for client, server, and shared; `npm test` passed 205/205; `npm run test:db` passed 177/177. The production build used `NEXT_PUBLIC_DEMO_MODE=false` with `NEXT_PUBLIC_DEMO_PASSWORD` unset, and a fixed-string scan of `client/.next` found no demo password. A scan for the specified direction-sensitive spacing and text alignment utility patterns returned no matches in client TypeScript sources. Live Compose checks returned 401 JSON for unauthenticated `/api/v1/auth/me`, and 200 with `Set-Cookie: careloop_session` for login through `/api/v1/auth/login` with the matching client Origin. Route curl checks returned 307 to `/login` for all four role pages without a cookie; each seeded role login returned 200, and each of its three other role pages returned 307 to its own landing route. Browser verification confirmed the demo login panel, unauthenticated redirect, demo-admin login, live dashboard counts, and simulated Demo time banner. The remaining manual checklist items (logout, rate-limit message, Arabic toggle, and 360 px / 1280 px layouts) remain for owner visual review.
+
 ## T-102 — Core clock, event log, and audit
 
 - `clock advance, reset, and persistence across a new instance` proves the simulated clock persists and resets.

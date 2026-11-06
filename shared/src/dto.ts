@@ -706,6 +706,7 @@ export const AttentionQueueItemSchema = StrictObject({
   ...AttentionResponseSchema.omit({ caseId: true, updatedAt: true }).shape,
 });
 export const AttentionQueuePageSchema = makeCursorPageSchema(AttentionQueueItemSchema);
+export type AttentionQueuePage = z.infer<typeof AttentionQueuePageSchema>;
 
 export const MetricCohortBasisSchema = z.enum([
   'CASES_CREATED_MORE_THAN_30_DAYS_AGO_OR_CLOSED',

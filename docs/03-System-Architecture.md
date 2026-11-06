@@ -21,6 +21,16 @@ The attention module is a read-time operational projection. `attentionEngine.ts`
 
 The escalation module shares the attention engine's pure `overdueInfo` function and adds a threshold policy plus a periodic transactional sweep. A PostgreSQL transaction advisory lock prevents overlapping sweep passes. The sweep loads operational snapshots in batches and writes only level increases; failed-contact, referral-reassignment, and consent-revocation triggers remain in their originating transactions. `server.ts` owns the interval and uses the injected persisted demo clock. Resolve and owner assignment routes keep event, case update, and audit writes together.
 
+## Frontend application shell
+
+The Next.js App Router client is a UI for the Express REST API. `middleware.ts` redirects requests without the httpOnly session cookie to `/login`. For a cookie-bearing request to a role area it asks Express `/api/v1/auth/me` to validate the session and obtains the current role before redirecting mismatched areas to the user's landing route. Each role page also loads `/api/v1/auth/me` through `AuthProvider`; `RoleGuard` repeats the client-side route check after navigation. The Express role middleware remains authoritative for every data endpoint.
+
+`client/next.config.ts` rewrites browser requests from relative `/api/v1/...` paths to `API_INTERNAL_URL` (Compose defaults to `http://server:4000`; local development defaults to `http://localhost:4000`). This keeps API calls same-origin in the browser, so login's `Set-Cookie` response passes through the Next server without browser CORS configuration. `client/lib/api.ts` sends JSON with same-origin credentials, parses the shared error envelope, validates successful payloads against shared Zod schemas when supplied, and redirects on protected-call 401 responses.
+
+`AuthProvider` owns session, login and logout state. The shell provides role-specific planned navigation, identity/provider details, a patient-only language toggle, and a 30-second poll of the demo clock. Patient language dictionaries live in `client/lib/i18n`; the provider sets the document language and direction (`ar`/RTL or `en`/LTR). Staff screens remain English. `client/components/ui` contains keyboard-operable shared controls with visible focus treatment and semantic error/status output. Role landing pages call the live case or attention APIs and display returned counts.
+
+The login page's seeded account helper is included only when `NEXT_PUBLIC_DEMO_MODE=true`; because Next.js embeds public environment values in browser assets, production builds must set it to `false` and must not provide a demo password. This helper is for local synthetic demos only.
+
 <!-- BEGIN GENERATED STATE MACHINE -->
 
 ## Lifecycle state diagram

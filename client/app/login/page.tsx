@@ -106,7 +106,7 @@ export default function LoginPage() {
   const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 
   const defaultDemoPassword =
-    process.env.NEXT_PUBLIC_DEMO_PASSWORD || 'CareLoopDemo2026!';
+    process.env.NEXT_PUBLIC_DEMO_PASSWORD || '';
 
   const handleFillDemo = (demoEmail: string) => {
     setEmail(demoEmail);

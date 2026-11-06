@@ -30,6 +30,22 @@ npm run seed
 
 This applies any pending migrations and creates three providers, staff accounts, and two synthetic patients (English and Arabic). Local demo login: `admin@careloop.local` (or another seeded account) with the `DEMO_PASSWORD` from `.env`; the example value is `CareLoopDemo2026!`. This is demo-only and must be changed before any hosted deployment.
 
+### Log in to the client by role
+
+Open <http://localhost:3000/login>. Use the configured `DEMO_PASSWORD` (example: `CareLoopDemo2026!`) with one of these seeded accounts:
+
+| Role | Login email | Landing page |
+|---|---|---|
+| Patient (English) | `patient.en@careloop.local` | `/patient` |
+| Patient (Arabic) | `patient.ar@careloop.local` | `/patient` |
+| Doctor | `doctor.screening@careloop.local` | `/doctor` |
+| Doctor (receiving hospital) | `doctor.hospital@careloop.local` | `/doctor` |
+| Coordinator | `coordinator.screening@careloop.local` | `/coordinator` |
+| Coordinator (hospital) | `coordinator.hospital@careloop.local` | `/coordinator` |
+| Admin | `admin@careloop.local` | `/admin` |
+
+The login page shows one-click demo account fills only when `NEXT_PUBLIC_DEMO_MODE=true`. This is enabled by default for local Compose development and is strictly demo-only. Next.js embeds `NEXT_PUBLIC_*` values in production browser assets: set `NEXT_PUBLIC_DEMO_MODE=false` at build time and omit `NEXT_PUBLIC_DEMO_PASSWORD` for any production build. The shell proxies browser requests through the Next server; browser code uses relative `/api/v1/...` paths.
+
 ## Auth curl examples
 
 The API is rooted at `http://localhost:4000/api/v1`. These examples use the example demo password. If you changed `DEMO_PASSWORD`, use that value instead.
