@@ -1,4 +1,4 @@
-import type { CaseState, ClosureReason } from '@careloop/shared';
+import type { CaseState, ClosureReason, Language } from '@careloop/shared';
 
 export type PatientProgressStep = 'review' | 'plan' | 'referral' | 'appointment' | 'care';
 
@@ -46,7 +46,7 @@ export function getPatientProgress(
   return { currentStep, completedSteps: progressSteps.indexOf(currentStep), closureLabel: null };
 }
 
-export function formatPatientDateTime(value: string, language: 'EN' | 'AR'): string {
+export function formatPatientDateTime(value: string, language: Language): string {
   const locale = language === 'AR' ? 'ar-AE-u-nu-latn' : 'en-GB-u-nu-latn';
   return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',

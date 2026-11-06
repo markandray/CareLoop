@@ -16,7 +16,7 @@ import { useT } from '../../lib/i18n/context';
 import { ShellLayout } from '../../components/ShellLayout';
 import { ReviewNoticeBanner } from '../../components/ReviewNoticeBanner';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
-import { getPatientProgress } from '../../lib/patient-portal';
+import { formatPatientDateTime, getPatientProgress } from '../../lib/patient-portal';
 
 function PatientDashboard() {
   const { t, language } = useT();
@@ -90,7 +90,7 @@ function PatientDashboard() {
                     <h3 className="text-sm font-semibold text-slate-800">{t('patient_nextStep')}</h3>
                     <p className="mt-1 text-sm text-slate-700">{item.recommendedNextStep ?? item.statusDescription}</p>
                   </div>
-                  <p className="mt-4 text-xs text-slate-600">{t('patient_lastUpdate')}: <time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleString(language === 'AR' ? 'ar' : 'en')}</time></p>
+                  <p className="mt-4 text-xs text-slate-600">{t('patient_lastUpdate')}: <time dateTime={item.updatedAt}>{formatPatientDateTime(item.updatedAt, language)}</time></p>
                 </Card>
               </Link>
             ))}
