@@ -46,6 +46,31 @@ Open <http://localhost:3000/login>. Use the configured `DEMO_PASSWORD` (example:
 
 The login page shows one-click demo account fills only when `NEXT_PUBLIC_DEMO_MODE=true`. This is enabled by default for local Compose development and is strictly demo-only. Next.js embeds `NEXT_PUBLIC_*` values in production browser assets: set `NEXT_PUBLIC_DEMO_MODE=false` at build time and omit `NEXT_PUBLIC_DEMO_PASSWORD` for any production build. The shell proxies browser requests through the Next server; browser code uses relative `/api/v1/...` paths.
 
+## Demo data
+
+Start the Compose stack, then create the repeatable synthetic cases through the API:
+
+```sh
+npm run seed
+npm run seed:demo
+```
+
+`seed:demo` logs in using the seeded accounts and stores each login cookie for its API calls. It creates fourteen synthetic cases and prints the case IDs, states, urgency, provider, suggested login, and the stuck case ID. It refuses a second run; recreate the demo with `npm run demo:reset`. That command prints the configured database name, then destroys **all data in that development database**, reapplies migrations, seeds the demo accounts, and recreates the scenario. It requires `ALLOW_DEMO_RESET=true` and is blocked when `NODE_ENV=production`. Compose enables this flag for local development. Never point it at a database containing data you need.
+
+Use the configured `DEMO_PASSWORD` (example: `CareLoopDemo2026!`) for all accounts. The seeded cases can be inspected with these accounts:
+
+| Scenario | Account |
+|---|---|
+| Urgent, unassigned NEW case; saved-draft NEW case | `admin@careloop.local` or the corresponding patient account |
+| Reviewed but not dispatched; reviewed and dispatched | `coordinator.screening@careloop.local` / `coordinator.hospital@careloop.local` |
+| Confirmation pending; rejected referral awaiting reassignment | `coordinator.screening@careloop.local` |
+| Stuck cross-provider referral | `coordinator.hospital@careloop.local` (receiving provider); the script prints its case ID |
+| Accepted referral, scheduled appointment, missed appointment | `coordinator.screening@careloop.local` |
+| Care started and closed examples | `doctor.screening@careloop.local` |
+| Patient explanation and acknowledgement | `patient.en@careloop.local`, `patient.ar@careloop.local` |
+
+The stuck case is left at `REFERRAL_PENDING` with active cross-provider consent and an untouched pending referral. Do not advance the demo clock in the seed. During the presentation, the admin advances it by 48 hours; the urgent referral's 24-hour illustrative acceptance SLA is then overdue, so the operational attention queue shows it as HIGH and the sweep raises an escalation. Operational attention is not a clinical risk assessment.
+
 ## Auth curl examples
 
 The API is rooted at `http://localhost:4000/api/v1`. These examples use the example demo password. If you changed `DEMO_PASSWORD`, use that value instead.

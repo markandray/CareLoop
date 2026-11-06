@@ -197,6 +197,33 @@ export async function runSeed(): Promise<void> {
   console.log(`CareLoop Seeder: Completed successfully.`);
 }
 
+/** Add deterministic synthetic patient accounts for the repeatable demo dataset. */
+export async function upsertDemoPatients(): Promise<void> {
+  const passwordHash = await bcrypt.hash(getEnv().DEMO_PASSWORD, 10);
+  const clock = new DatabaseClock(prisma.systemSetting);
+  await clock.initialize();
+  const patients = [
+    { email: 'patient.demo03@careloop.local', name: 'Synthetic Patient Three', mrn: 'MRN-SYN-0003', language: 'EN' as const },
+    { email: 'patient.demo04@careloop.local', name: 'Synthetic Patient Four', mrn: 'MRN-SYN-0004', language: 'AR' as const },
+    { email: 'patient.demo05@careloop.local', name: 'Synthetic Patient Five', mrn: 'MRN-SYN-0005', language: 'EN' as const },
+    { email: 'patient.demo06@careloop.local', name: 'Synthetic Patient Six', mrn: 'MRN-SYN-0006', language: 'AR' as const },
+    { email: 'patient.demo07@careloop.local', name: 'Synthetic Patient Seven', mrn: 'MRN-SYN-0007', language: 'EN' as const },
+    { email: 'patient.demo08@careloop.local', name: 'Synthetic Patient Eight', mrn: 'MRN-SYN-0008', language: 'EN' as const },
+    { email: 'patient.demo09@careloop.local', name: 'Synthetic Patient Nine', mrn: 'MRN-SYN-0009', language: 'AR' as const },
+    { email: 'patient.demo10@careloop.local', name: 'Synthetic Patient Ten', mrn: 'MRN-SYN-0010', language: 'EN' as const },
+    { email: 'patient.demo11@careloop.local', name: 'Synthetic Patient Eleven', mrn: 'MRN-SYN-0011', language: 'EN' as const },
+    { email: 'patient.demo12@careloop.local', name: 'Synthetic Patient Twelve', mrn: 'MRN-SYN-0012', language: 'AR' as const },
+    { email: 'patient.demo13@careloop.local', name: 'Synthetic Patient Thirteen', mrn: 'MRN-SYN-0013', language: 'EN' as const },
+    { email: 'patient.demo14@careloop.local', name: 'Synthetic Patient Fourteen', mrn: 'MRN-SYN-0014', language: 'EN' as const },
+  ];
+  const hash = passwordHash;
+  for (const entry of patients) {
+    const now = clock.now();
+    const user = await prisma.user.upsert({ where: { email: entry.email }, update: { name: entry.name, role: 'PATIENT', providerId: null, language: entry.language, passwordHash: hash, updatedAt: now }, create: { email: entry.email, name: entry.name, role: 'PATIENT', language: entry.language, passwordHash: hash, createdAt: now, updatedAt: now } });
+    await prisma.patient.upsert({ where: { userId: user.id }, update: { syntheticMrn: entry.mrn, dateOfBirth: new Date('1990-01-01'), preferredLanguage: entry.language, preferredChannel: 'PORTAL', updatedAt: now }, create: { userId: user.id, syntheticMrn: entry.mrn, dateOfBirth: new Date('1990-01-01'), preferredLanguage: entry.language, preferredChannel: 'PORTAL', createdAt: now, updatedAt: now } });
+  }
+}
+
 if (process.argv[1]?.endsWith('seed.ts')) {
   runSeed()
     .catch((err) => {

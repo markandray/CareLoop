@@ -252,8 +252,13 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 ### [ ] T-702 Deployment
 - Agent: Codex. Accept: live URL works with demo accounts; secrets not in repo.
 
-### [ ] T-703 Demo data and accounts
+### [x] T-703 Demo data and accounts
 - Accept: seed script creates demo users and cases at varied stages; credentials listed in README.
+
+#### [x] T-703a Demo scenario dataset and guarded reset
+- Agent: Codex. Branch: `task/T-703a-demo-seed`.
+- Output: HTTP-driven fourteen-case seed, idempotence marker, local reset command and guard, stage/account README, required assumptions/limitations documentation, and DB coverage.
+- Evidence (2026-11-06): `npm run lint`, root `npm run build`, `npm test` (205/205), and `npm run test:db` (186/186) pass. `npm run demo:reset` printed database `careloop`, reset and seeded all 14 cases; stuck case `CL-1006`. Coordinator login returned 200 and `/api/v1/attention/cases?limit=100` returned 200; unassigned urgent case `CL-1001` scored MEDIUM (UNASSIGNED + URGENT_TIER), and `CL-1006` remained REFERRAL_PENDING before clock advance. The demo clock was not advanced. Extra patients use the existing seed upsert pattern because `POST /patients` is documented but not mounted. See AGENTS.md Progress log and docs/07.
 
 ### [ ] T-704 Screenshots and optional short demo recording
 - Owner. Accept: images in `docs/`; not required by the challenge, only if time remains.

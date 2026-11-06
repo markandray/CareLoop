@@ -15,6 +15,8 @@
     "docs:state-machine": "node --import tsx scripts/generate-state-machine-docs.ts",
     "test:db": "docker compose run --rm -v \"$PWD/server:/app/server\" -v \"$PWD/shared:/app/shared\" -e 'DATABASE_URL=postgresql://careloop:careloop_local_only@db:5432/careloop_test?schema=public' server npm run test:db",
     "seed": "docker compose run --rm -v \"$PWD/server:/app/server\" server npm run seed",
+    "seed:demo": "docker compose run --rm -v \"$PWD/server:/app/server\" server npm run seed:demo",
+    "demo:reset": "docker compose run --rm -v \"$PWD/server:/app/server\" server npm run demo:reset",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

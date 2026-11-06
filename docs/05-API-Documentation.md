@@ -243,8 +243,11 @@ Simulation probabilities are documented assumptions and are not empirical outcom
 - Session cookie uses `httpOnly`, `SameSite=Strict`, and `Secure` in production. Bodies are JSON only, state-changing calls verify `Origin`, and login is rate-limited.
 - Login rate limiting enforces 5 failed attempts per 15 minutes per email+IP, returning HTTP 429 `RATE_LIMITED`. Successful logins do not count against the threshold. The prototype uses an in-memory tracker, which is acceptable for single-instance prototype scope and documented as a limitation.
 
+`POST /cases/:id/decline-care` is the patient-owned route that records a `CARE_DECLINED_BY_PATIENT` event without changing workflow state. A clinician can then use the matching state-machine closure transition; the patient request alone never closes a case.
+
 ## Spec issues
 
 1. The product spec does not define a stable cursor encoding or whether clients may replay events. The API keeps cursors opaque and event replay internal.
 2. The User schema has no deactivation flag (e.g. `isActive` or `deactivatedAt`). Active authentication relies on reloading the user record from PostgreSQL to immediately block deleted users, but explicit administrative deactivation is not represented in the schema without an additive migration.
 3. The spec does not define snapshot isolation for attention queue pages. Scores are recomputed on every request; if a case changes or the demo clock advances between pages, its score-based position can move across the opaque cursor. The cursor gives keyset ordering for each read, not a frozen multi-page snapshot.
+4. This document lists `POST /patients`, but the running app does not mount a patient-creation route. Demo-only additional patient accounts are therefore created with the same Prisma upsert pattern as the account seeder; case creation and subsequent workflow actions still use HTTP endpoints.

@@ -19,11 +19,12 @@ import {
   ReferralDtoSchema,
   makeCursorPageSchema,
   type TransitionRequest,
+  DeclineCareRequestSchema,
 } from '@careloop/shared';
 import type { Clock } from '../../core/clock';
 import { requireRole } from '../../middleware/role/roleMiddleware';
 import { validateBody, validateQuery } from '../../middleware/validate/validateRequest';
-import { projectStaffCaseEvent } from './caseProjection';
+import { projectPatientCaseEvent, projectStaffCaseEvent } from './caseProjection';
 import { createCase, getCase, listCaseEvents, listCases } from './caseService';
 import { executeTransition } from './transitionService';
 import type { CaseActor } from './caseVisibility';
@@ -217,6 +218,23 @@ export function createCaseRouter(
       const event = 'events' in patientCase ? patientCase.events.find((item) => item.id === result.eventId) : undefined;
       if (!event) throw AppError.internal('Understanding event projection was not available.');
       res.status(200).json({ case: patientCase, event });
+    } catch (error) { next(error); }
+  });
+
+  router.post('/:id/decline-care', requireRole('PATIENT'), validateBody(DeclineCareRequestSchema), async (req, res, next) => {
+    try {
+      const caseId = caseIdParam(req);
+      const result = await withTransaction(prisma, async (tx) => {
+        const row = await tx.screeningCase.findFirst({ where: { id: caseId, patient: { is: { userId: req.user!.id } } }, select: { id: true, state: true, closureReason: true } });
+        if (!row || row.state === CaseState.CLOSED) throw AppError.notFound('Case not found.');
+        const prior = await tx.caseEvent.findFirst({ where: { caseId, type: CaseEventType.CARE_DECLINED_BY_PATIENT }, select: { id: true } });
+        if (prior) throw AppError.conflict('Care has already been declined for this case.');
+        const event = await appendEvent(tx, { caseId, type: CaseEventType.CARE_DECLINED_BY_PATIENT, actorType: ActorType.USER, actorId: req.user!.id, fromState: row.state, toState: row.state, payload: { reason: req.body.reason } }, clock);
+        await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'CARE_DECLINED_BY_PATIENT', entityType: 'ScreeningCase', entityId: caseId }, clock);
+        const withActor = await tx.caseEvent.findUniqueOrThrow({ where: { id: event.id }, include: { actor: true } });
+        return projectPatientCaseEvent(withActor, row.state, row.closureReason);
+      });
+      res.status(200).json({ event: result });
     } catch (error) { next(error); }
   });
 

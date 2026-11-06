@@ -211,3 +211,16 @@ All database HTTP tests run with `node:test` against PostgreSQL through `npm run
 - Demo-clock coverage is named `demo clock advance is admin-only, capped, audited, and disabled routes return 404` and `one 48 hour admin clock advance makes an urgent pending referral HIGH and escalated`. The transition suite separately verifies `third referral reassignment raises LEVEL_2 in the same transaction`; existing contact-attempt and consent suites verify their event-based escalation triggers.
 - Live Compose curl returned 200 for doctor login, case creation (201), admin login, five-hour clock advance (three escalations raised), attention queue read, coordinator login, and resolution. The created synthetic case `CL-1008` appeared as HIGH / LEVEL_1 and resolved to LEVEL_0 with an `ESCALATION_CLEARED` event.
 - Not exercised: production deployment and a browser UI for escalation/clock controls. Synthetic data only; operational thresholds remain illustrative and are not clinical standards.
+
+## T-703a — Demo scenario seed
+
+The named database scenarios are in `server/tests/demo-seed.db.ts`:
+
+- `demo seed creates the requested cases in each workflow state`
+- `each demo case starts with CASE_CREATED and follows allowed state-machine transitions`
+- `stuck demo case retains pending referral and active cross-provider consent`
+- `patient-facing seeded explanation and notification text has no digits or denylisted clinical terms`
+- `demo seed refuses a second run and points to demo:reset`
+- `demo seed prints the stuck case identifier and a fourteen-case summary`
+
+Reset guard scenarios are in `server/tests/demo-reset.db.ts`: `demo reset guard refuses without ALLOW_DEMO_RESET`, `demo reset guard refuses production even if explicitly enabled`, and `demo reset reports the configured database name`. Test evidence and any live reset/curl output are recorded in the current T-703a Progress log in `AGENTS.md`.

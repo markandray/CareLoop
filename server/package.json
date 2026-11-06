@@ -8,6 +8,8 @@
     "generate": "prisma generate",
     "test:db": "npm run generate && node scripts/reset-test-db.mjs && prisma migrate deploy && tsx --test --test-concurrency=1 \"src/**/*.test.ts\" \"tests/*.db.ts\"",
     "seed": "npm run generate && prisma migrate deploy && tsx src/seed.ts",
+    "seed:demo": "tsx src/demoSeed.ts",
+    "demo:reset": "node scripts/demo-reset.mjs",
     "start": "node dist/server.js"
   },
   "dependencies": {
