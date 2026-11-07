@@ -824,6 +824,7 @@ export const ProviderCursorPageSchema = makeCursorPageSchema(
 export const ProviderStaffCursorPageSchema = makeCursorPageSchema(
   ProviderStaffDtoSchema,
 );
+export const ConsentCursorPageSchema = makeCursorPageSchema(ConsentDtoSchema);
 export const EvidenceCursorPageSchema = makeCursorPageSchema(EvidenceDtoSchema);
 export const CoordinatorEvidenceCursorPageSchema = makeCursorPageSchema(
   CoordinatorEvidenceDtoSchema,
@@ -832,6 +833,7 @@ export type ProviderCursorPage = z.infer<typeof ProviderCursorPageSchema>;
 export type ProviderStaffCursorPage = z.infer<
   typeof ProviderStaffCursorPageSchema
 >;
+export type ConsentCursorPage = z.infer<typeof ConsentCursorPageSchema>;
 export type EvidenceCursorPage = z.infer<typeof EvidenceCursorPageSchema>;
 export type CoordinatorEvidenceCursorPage = z.infer<
   typeof CoordinatorEvidenceCursorPageSchema
