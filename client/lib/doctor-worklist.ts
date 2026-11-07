@@ -23,11 +23,17 @@ export function getWorklistTab(state: CaseState): DoctorWorklistTab {
 export function sortWorklist<T extends Pick<CaseListItem, 'id' | 'dueAt' | 'attention'>>(
   cases: readonly T[],
 ): T[] {
-  return [...cases].sort((a, b) =>
-    (b.attention?.score ?? 0) - (a.attention?.score ?? 0)
-    || (a.dueAt === null ? 1 : b.dueAt === null ? -1 : Date.parse(a.dueAt) - Date.parse(b.dueAt))
-    || a.id.localeCompare(b.id),
-  );
+  return [...cases].sort((a, b) => {
+    const scoreDifference = (b.attention?.score ?? 0) - (a.attention?.score ?? 0);
+    if (scoreDifference) return scoreDifference;
+    if (a.dueAt === null && b.dueAt !== null) return 1;
+    if (b.dueAt === null && a.dueAt !== null) return -1;
+    if (a.dueAt !== null && b.dueAt !== null) {
+      const dueDifference = Date.parse(a.dueAt) - Date.parse(b.dueAt);
+      if (dueDifference) return dueDifference;
+    }
+    return a.id.localeCompare(b.id);
+  });
 }
 
 function relativeDuration(milliseconds: number): string {

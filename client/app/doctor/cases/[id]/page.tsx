@@ -14,6 +14,22 @@ import { formatDueTime } from '../../../../lib/doctor-worklist';
 const ExplanationListSchema = z.object({ items: z.array(ExplanationDtoSchema) }).strict();
 type ExplanationList = z.infer<typeof ExplanationListSchema>;
 
+async function loadStaffEvents(caseId: string): Promise<CaseEventDtoStaff[]> {
+  const events: CaseEventDtoStaff[] = [];
+  let cursor: string | null = null;
+  do {
+    const query = new URLSearchParams({ limit: '100' });
+    if (cursor) query.set('cursor', cursor);
+    const page: CaseEventStaffCursorPage = await apiFetch(
+      `/api/v1/cases/${encodeURIComponent(caseId)}/events?${query}`,
+      { method: 'GET', schema: CaseEventStaffCursorPageSchema },
+    );
+    events.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return events;
+}
+
 function EventPayload({ payload }: { payload: Record<string, unknown> | null }) {
   if (!payload || !Object.keys(payload).length) return null;
   const entries = Object.entries(payload);
@@ -27,7 +43,7 @@ function DoctorCaseDetail() {
   const [attention, setAttention] = useState<AttentionResponse | null>(null);
   const [events, setEvents] = useState<CaseEventDtoStaff[]>([]);
   const [explanations, setExplanations] = useState<ExplanationList | null>(null);
-  const [now, setNow] = useState(new Date().toISOString());
+  const [now, setNow] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -35,14 +51,13 @@ function DoctorCaseDetail() {
     let active = true;
     const load = async () => {
       try {
-        const query = new URLSearchParams({ limit: '100' });
         const [caseData, attentionData, eventPage, explanationData] = await Promise.all([
           apiFetch<CaseDetailDoctor>(`/api/v1/cases/${encodeURIComponent(id)}`, { method: 'GET', schema: CaseDetailDoctorSchema }),
           apiFetch<AttentionResponse>(`/api/v1/cases/${encodeURIComponent(id)}/attention`, { method: 'GET', schema: AttentionResponseSchema }),
-          apiFetch<CaseEventStaffCursorPage>(`/api/v1/cases/${encodeURIComponent(id)}/events?${query}`, { method: 'GET', schema: CaseEventStaffCursorPageSchema }),
+          loadStaffEvents(id),
           apiFetch<ExplanationList>(`/api/v1/cases/${encodeURIComponent(id)}/explanations`, { method: 'GET', schema: ExplanationListSchema }),
         ]);
-        if (active) { setDetail(caseData); setAttention(attentionData); setEvents(eventPage.items); setExplanations(explanationData); setNow(attentionData.updatedAt); }
+        if (active) { setDetail(caseData); setAttention(attentionData); setEvents(eventPage); setExplanations(explanationData); setNow(attentionData.updatedAt); }
       } catch { if (active) setError(true); }
       finally { if (active) setLoading(false); }
     };
@@ -54,7 +69,7 @@ function DoctorCaseDetail() {
   if (error || !detail) return <ShellLayout><ErrorBanner title="Case unavailable" message="We could not load this case. Check that it belongs to your provider, then try again." /><Link href="/doctor" className="mt-4 inline-block text-sm font-semibold text-teal-900 underline">Back to worklist</Link></ShellLayout>;
 
   const owner = detail.owner.kind === 'USER' ? detail.owner.name : detail.owner.kind === 'QUEUE' ? `${detail.owner.role} queue` : 'Unassigned';
-  const due = formatDueTime(detail.dueAt, now);
+  const due = formatDueTime(detail.dueAt, now ?? attention?.updatedAt ?? detail.updatedAt);
   return <ShellLayout>
     <div className="space-y-5">
       <Link href="/doctor" className="text-sm font-medium text-teal-900 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">Back to worklist</Link>

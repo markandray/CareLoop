@@ -23,13 +23,14 @@ function DoctorWorklist() {
   const [tab, setTab] = useState<DoctorWorklistTab>('needs-review');
   const [urgency, setUrgency] = useState<Urgency | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
-  const [serverNow, setServerNow] = useState(new Date().toISOString());
+  const [serverNow, setServerNow] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [moreLoading, setMoreLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadPage = useCallback(async (nextCursor: string | null, append: boolean) => {
-    append ? setMoreLoading(true) : setLoading(true);
+    if (append) setMoreLoading(true);
+    else setLoading(true);
     try {
       const query = new URLSearchParams({ limit: '25' });
       if (nextCursor) query.set('cursor', nextCursor);
@@ -60,7 +61,7 @@ function DoctorWorklist() {
 
   const visibleRows = useMemo(() => {
     const byTab = rows.filter((row) => getWorklistTab(row.state) === tab);
-    const filtered = filterWorklist(byTab.map((row) => ({ ...row, patient: row.detail.patient })), urgency, search);
+    const filtered = filterWorklist(byTab.map((row) => ({ ...row, urgencyLabel: row.urgencyLabel ?? row.detail.intakeUrgency, patient: row.detail.patient })), urgency, search);
     return sortWorklist(filtered);
   }, [rows, tab, urgency, search]);
 
@@ -81,7 +82,7 @@ function DoctorWorklist() {
       {loading ? <div className="flex justify-center rounded-xl border border-slate-200 bg-white py-12"><Spinner label="Loading doctor worklist…" /></div> : visibleRows.length === 0 ? <EmptyState title="No cases in this view" description="Try another tab or adjust the urgency and search filters." /> : (
         <ul className="space-y-3">
           {visibleRows.map((row) => {
-            const due = formatDueTime(row.dueAt, serverNow);
+            const due = formatDueTime(row.dueAt, serverNow ?? row.updatedAt);
             const owner = row.owner.kind === 'USER' ? row.owner.name : row.owner.kind === 'QUEUE' ? `${row.owner.role} queue` : 'Unassigned';
             return <li key={row.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">

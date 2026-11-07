@@ -173,6 +173,12 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: worklist, case detail, approve summary/next step/urgency, create referral, accept/reject incoming referral, answer consults, sign off closures.
 - Accept: doctor cannot see other providers' unconsented cases.
 
+#### [ ] T-303a Doctor worklist, read-only case view, and case creation
+- Agent: Codex. Branch: `task/T-303a-doctor-worklist`.
+- Output: provider-scoped state tabs, urgency/search filters, attention/due-time ordering and pagination; read-only doctor case view; shared-schema validated case create flow with keyboard patient picker; pure helper tests and browser checklist.
+- Evidence (2026-11-07): implementation committed in numbered steps `c954949` (worklist), `b9e366f` (case view), `10cce76` (create case), `18dfd00` (helpers/error mapping), with step 5 documentation/log commit pending. `npm run lint` passes. `npm test`: 14 files, 259 tests passed. The root `npm run build` was launched with redirected output but did not return within the one-shot 30-second window; it was not polled per task instructions, so its exit code is unverified. Browser tool opened the local login page, but Compose services were unreachable after the client rebuild and doctor sign-in could not be completed. Manual owner walkthrough remains pending in docs/07. No server or shared contract changes.
+- Spec gap: the DOCTOR case DTO omits the original preliminary intake summary/action and structured review-draft fields, and there is no mounted evidence-read endpoint; this UI cannot show those original values without an API change.
+
 ### [ ] T-304 Coordinator dashboard
 - Agent: Antigravity. Depends: T-301, T-205
 - Output: attention queue with reasons and suggested actions, contact log form, schedule appointment, delay reason, escalate, close with evidence.

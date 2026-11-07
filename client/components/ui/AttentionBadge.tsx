@@ -22,7 +22,9 @@ export function AttentionBadge({
 
   return (
     <span
-      title="Operational workflow rule, not a clinical risk assessment."
+      title={`${score !== undefined ? `Score ${score}. ` : ''}Operational workflow rule, not a clinical risk assessment.`}
+      aria-label={`${level} attention${score !== undefined ? `, score ${score}` : ''}. Operational workflow rule, not a clinical risk assessment.`}
+      tabIndex={0}
       className={`inline-flex items-center gap-1.5 rounded-md border ps-2 pe-2 py-0.5 text-xs font-semibold ${colorClasses} ${className}`}
     >
       {/* Explicit icon: never colour alone */}

@@ -1,5 +1,19 @@
 # Testing and Validation
 
+## T-303a — Doctor worklist, case view, and case creation browser checklist
+
+Use both seeded doctor accounts from the README: the doctor at each provider. For each doctor, sign in and check `/doctor`, open one case from every seeded workflow stage (NEW, CLINICIAN_REVIEWED, CONFIRMATION_PENDING, REFERRAL_PENDING, REFERRAL_ACCEPTED, APPOINTMENT_SCHEDULED, CARE_STARTED, and CLOSED where in scope), then check `/doctor/cases/new`.
+
+1. On the worklist, check Needs review, In progress, and Closed tabs; confirm counts and cases match each state, the page has clear empty/loading/error states, and the result count is announced. Verify the API returns only the doctor's provider scope.
+2. Check case ID, patient display name and MRN, state badge, intake/confirmed urgency, owner or Unassigned, due date relative to the server clock and rendered in Asia/Dubai, attention badge/score, and escalation level only when nonzero. Hover and keyboard-focus the attention badge to read its operational disclaimer. Confirm score descending then due-time order; test urgency and case ID/name/MRN search and Load more.
+3. Open one case from every available demo stage. Check the doctor-only detail projection, attention reasons and suggested action, exact operational-rule disclaimer, referral and appointment cards, staff timeline actor/time, collapsed payload details (without raw JSON), and DRAFT/APPROVED/STALE explanation labels. Confirm no patient-only projection hides fields that the doctor DTO provides.
+4. Create a case for a patient whose preferred language is English and another whose preferred language is Arabic. Use the combobox only by keyboard for one creation: type two or more characters, ArrowDown/ArrowUp, Enter to select, and Escape to close results; verify `aria-activedescendant` follows the active option. Confirm successful create navigates to the new detail and the doctor is restricted to their provider.
+5. At **360 px** and **1280 px**, inspect all three worklist tabs, case detail, and create form for clipped content, horizontal page overflow, usable controls, and visible keyboard focus. Repeat for both seeded doctors.
+
+Record browser, viewport, test date, and any failures below after the owner completes this checklist. Current implementation note: the existing doctor detail DTO does not expose preliminary intake summary/action or structured review-draft fields, and the evidence-read endpoint remains planned; the detail page can show approved summary/action fields and explanation history but cannot display the original intake or structured draft values without an API contract change.
+
+Codex browser attempt (2026-11-07): the local login page opened, but the local Compose client/server stopped responding after the client rebuild; no doctor login or screen walkthrough was completed. The checklist above remains unverified.
+
 ## T-301 — Frontend shell and API proxy
 
 The four role landing pages make live calls through relative `/api/v1/...` URLs. The API proxy uses the Next.js rewrite configured by `API_INTERNAL_URL`; its response should preserve the server's `Set-Cookie` header. The existing server Origin middleware accepts same-origin browser writes from `http://localhost:3000` and rejects a mismatched Origin.
