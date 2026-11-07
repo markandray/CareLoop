@@ -1,4 +1,5 @@
 import type { ApiErrorCode, CaseListItem, CaseState, Urgency } from '@careloop/shared';
+import { getApiErrorCategory } from './patient-portal';
 
 export type DoctorWorklistTab = 'needs-review' | 'in-progress' | 'closed';
 
@@ -50,14 +51,7 @@ export function formatDueTime(dueAt: string | null, now: string): { relative: st
 
 export type DoctorErrorMessage = 'access' | 'missing' | 'conflict' | 'validation' | 'session' | 'rate-limit' | 'network' | 'generic';
 export function getDoctorErrorMessage(code: ApiErrorCode | 'NETWORK_ERROR' | null, status: number): DoctorErrorMessage {
-  if (code === 'CONFLICT' || code === 'INVALID_TRANSITION' || status === 409) return 'conflict';
-  if (code === 'NOT_FOUND' || status === 404) return 'missing';
-  if (code === 'FORBIDDEN' || code === 'CONSENT_REQUIRED' || status === 403) return 'access';
-  if (code === 'VALIDATION_ERROR' || code === 'EVIDENCE_MISSING' || code === 'DELAY_REASON_REQUIRED' || status === 400 || status === 422) return 'validation';
-  if (code === 'UNAUTHENTICATED' || status === 401) return 'session';
-  if (code === 'RATE_LIMITED' || status === 429) return 'rate-limit';
-  if (code === 'NETWORK_ERROR' || status === 0) return 'network';
-  return 'generic';
+  return getApiErrorCategory(code, status);
 }
 
 export function filterWorklist<T extends { id: string; patient: { displayName?: string; name?: string; syntheticMrn: string }; urgencyLabel: Urgency | null }>(

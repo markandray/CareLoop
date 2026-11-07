@@ -97,14 +97,26 @@ export function canRevokeConsent(hasActiveConsent: boolean, pending: boolean): b
   return hasActiveConsent && !pending;
 }
 
-/** Maps only stable API codes/statuses to patient-safe localized copy; raw server text is never used. */
+export type ApiErrorCategory = 'conflict' | 'missing' | 'access' | 'validation' | 'session' | 'rate-limit' | 'network' | 'generic';
+
+/** Stable API-code mapping shared by patient and staff copy; server messages are never shown directly. */
+export function getApiErrorCategory(code: ApiErrorCode | 'NETWORK_ERROR' | null, status: number): ApiErrorCategory {
+  if (code === 'CONFLICT' || code === 'INVALID_TRANSITION' || status === 409) return 'conflict';
+  if (code === 'NOT_FOUND' || status === 404) return 'missing';
+  if (code === 'FORBIDDEN' || code === 'CONSENT_REQUIRED' || status === 403) return 'access';
+  if (code === 'VALIDATION_ERROR' || code === 'EVIDENCE_MISSING' || code === 'DELAY_REASON_REQUIRED' || status === 400 || status === 422) return 'validation';
+  if (code === 'UNAUTHENTICATED' || status === 401) return 'session';
+  if (code === 'RATE_LIMITED' || status === 429) return 'rate-limit';
+  if (code === 'NETWORK_ERROR' || status === 0) return 'network';
+  return 'generic';
+}
+
+/** Maps the shared stable category to patient-safe localized copy. */
 export function getPatientErrorMessageKey(code: ApiErrorCode | 'NETWORK_ERROR' | null, status: number): TranslationKey {
-  if (code === 'CONFLICT' || status === 409) return 'patient_errorConflict';
-  if (code === 'NOT_FOUND' || status === 404) return 'patient_errorNotFound';
-  if (code === 'FORBIDDEN' || code === 'CONSENT_REQUIRED' || status === 403) return 'patient_errorForbidden';
-  if (code === 'VALIDATION_ERROR' || code === 'INVALID_TRANSITION' || code === 'EVIDENCE_MISSING' || code === 'DELAY_REASON_REQUIRED' || status === 400 || status === 422) return 'patient_errorValidation';
-  if (code === 'UNAUTHENTICATED' || status === 401) return 'patient_errorUnauthenticated';
-  if (code === 'RATE_LIMITED' || status === 429) return 'patient_errorRateLimited';
-  if (code === 'NETWORK_ERROR' || status === 0) return 'patient_errorNetwork';
-  return 'patient_errorGeneric';
+  const keyByCategory: Record<ApiErrorCategory, TranslationKey> = {
+    conflict: 'patient_errorConflict', missing: 'patient_errorNotFound', access: 'patient_errorForbidden',
+    validation: 'patient_errorValidation', session: 'patient_errorUnauthenticated', 'rate-limit': 'patient_errorRateLimited',
+    network: 'patient_errorNetwork', generic: 'patient_errorGeneric',
+  };
+  return keyByCategory[getApiErrorCategory(code, status)];
 }
