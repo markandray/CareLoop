@@ -21,9 +21,9 @@ describe('doctor worklist helpers', () => {
 
   it('sorts by attention descending, then due time, with null dates last', () => {
     const rows = [
-      { id: 'CL-0003', dueAt: null, attention: { score: 10 } },
-      { id: 'CL-0002', dueAt: '2026-03-30T00:00:00.000Z', attention: { score: 20 } },
-      { id: 'CL-0001', dueAt: '2026-03-29T00:00:00.000Z', attention: { score: 10 } },
+      { id: 'CL-0003', dueAt: null, attention: { level: 'LOW' as const, score: 10 } },
+      { id: 'CL-0002', dueAt: '2026-03-30T00:00:00.000Z', attention: { level: 'MEDIUM' as const, score: 20 } },
+      { id: 'CL-0001', dueAt: '2026-03-29T00:00:00.000Z', attention: { level: 'LOW' as const, score: 10 } },
     ];
     expect(sortWorklist(rows).map((row) => row.id)).toEqual(['CL-0002', 'CL-0001', 'CL-0003']);
   });

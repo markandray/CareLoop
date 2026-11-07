@@ -35,7 +35,7 @@ function NewDoctorCase() {
   const [selected, setSelected] = useState<PatientSearchResult | null>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [searching, setSearching] = useState(false);
-  const [values, setValues] = useState({ pathway: '', screeningType: '', resultCategory: '', preliminarySummary: '', recommendedAction: '', intakeUrgency: 'ROUTINE' as const | 'URGENT' });
+  const [values, setValues] = useState({ pathway: '', screeningType: '', resultCategory: '', preliminarySummary: '', recommendedAction: '', intakeUrgency: 'ROUTINE' as 'ROUTINE' | 'URGENT' });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
