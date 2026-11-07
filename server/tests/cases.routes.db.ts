@@ -307,8 +307,8 @@ describe('T-104b case routes', () => {
       body: JSON.stringify({ reason: 'Synthetic preference.' }),
     });
     assert.equal(response.status, 200);
-    const body = await responseJson<{ event: { label: string } }>(response);
-    assert.ok(body.event.label);
+    const body = await responseJson<{ event: { labelKey: string } }>(response);
+    assert.equal(body.event.labelKey, 'CARE_DECLINED_RECORDED');
     const event = await prisma.caseEvent.findFirstOrThrow({ where: { caseId: id, type: 'CARE_DECLINED_BY_PATIENT' } });
     assert.equal(event.fromState, 'NEW');
     assert.equal(event.toState, 'NEW');
