@@ -184,8 +184,23 @@ test('acknowledging consent_needed writes its event and audit but leaves acknowl
   assert.equal(response.status, 200);
   const after = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });
   assert.equal(after.acknowledgedAt, null);
+  const notificationRow = await prisma.notification.findUniqueOrThrow({ where: { id: notification.id } });
+  assert.equal(notificationRow.acknowledgedAt?.toISOString(), now.toISOString());
   assert.ok(await prisma.caseEvent.findFirst({ where: { caseId: item.id, type: CaseEventType.NOTIFICATION_ACKNOWLEDGED, payload: { path: ['notificationId'], equals: notification.id } } }));
   assert.ok(await prisma.auditLog.findFirst({ where: { action: 'NOTIFICATION_ACKNOWLEDGED', entityId: notification.id } }));
+});
+
+test('acknowledging one notification timestamps only that notification', async () => {
+  const item = await makeCase(patientOne, originId);
+  const first = await makeNotification(item.id, patientUserId(patientOne), 'consent_needed', 'SENT');
+  const second = await makeNotification(item.id, patientUserId(patientOne), 'care_started', 'SENT');
+  const response = await request('PATIENT', 'POST', `/notifications/${first.id}/acknowledge`, {});
+  assert.equal(response.status, 200);
+  const firstRow = await prisma.notification.findUniqueOrThrow({ where: { id: first.id } });
+  const secondRow = await prisma.notification.findUniqueOrThrow({ where: { id: second.id } });
+  assert.equal(firstRow.acknowledgedAt?.toISOString(), now.toISOString());
+  assert.equal(secondRow.acknowledgedAt, null);
+  assert.equal((await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } })).acknowledgedAt, null);
 });
 
 test('later automatic notification acknowledgement is audited without changing the initial timestamp', async () => {

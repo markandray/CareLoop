@@ -55,7 +55,7 @@ A case owner is one user **or** one role/provider queue. Both may be absent for 
 - **ContactAttempt** — outreach channel and outcome tied to a case milestone and, when applicable, its referral or appointment. This makes failed attempts queryable for the current milestone.
 - **FollowUp** — an owned action and due date during care. Its status is `OPEN`, `COMPLETED`, or `CANCELLED`.
 - **Consult** — patient-to-clinician or clinician-to-clinician question, response, participants, and status.
-- **Notification** — in-app outbox entry with recipient, channel label, language, template key, and queued/sent timestamps; it does not store clinical message text.
+- **Notification** — in-app outbox entry with recipient, channel label, language, template key, queued/sent timestamps, and nullable per-notification `acknowledgedAt`; it does not store clinical message text. Acknowledgement time is set once for that notification, independently of the case-level `acknowledgedAt` used for the initial `result_reviewed` attention rule.
 - **ExplanationDraft** — localized template/LLM output and its draft/approval state, including the approving clinician and approval time. `inputHash` binds each row to the canonical structured review draft; prior hash rows are retained as stale history. History allows multiple rows per case/language even when the injectable clock gives them the same timestamp.
 - **Consent** — patient authorization for a receiving provider and scope, retained as a grant/revocation record rather than overwritten.
 - **AuditLog** — append-only record of actor type, optional user actor ID, action, entity type/id, and time for security and administrative auditing. `SYSTEM` identifies automation; `USER` requires an actor ID.
@@ -72,6 +72,8 @@ The ninth additive migration adds nullable `Referral.reason` and `Appointment.lo
 The tenth additive migration adds nullable `reviewDraftResultCategoryCode` and `reviewDraftNextStepCode` columns so the structured explanation catalog selections can be retained with the existing clinician review draft. They remain nullable for existing and pre-catalog drafts.
 
 The eleventh additive migration adds `ExplanationDraft.inputHash` (legacy rows receive a non-current sentinel hash) and `ScreeningCase.reviewDraftDoctorNote`. The twelfth migration replaces the unique `(caseId, language, createdAt)` index with a non-unique history lookup index so regenerating after an edit cannot collide when two writes share a clock timestamp.
+
+The thirteenth additive migration, `20261107010000_notification_acknowledged_at`, adds nullable `Notification.acknowledgedAt` (`TIMESTAMPTZ(3)`) without changing existing notification rows. It records the time an individual sent notification is acknowledged; the existing `ScreeningCase.acknowledgedAt` rule remains limited to `result_reviewed`.
 
 ## Enum contract
 
@@ -110,7 +112,7 @@ The enums `Role`, `ActorType`, `CaseState`, `FollowUpStatus`, `Urgency`, `Closur
 
 - `ScreeningCase(state, dueAt)` supports state worklists and query-time overdue filtering. `ownerUserId` and `(ownerQueueRole, ownerQueueProviderId)` support the user and queue ownership worklists.
 - `CaseEvent(caseId, createdAt)` loads a case timeline in chronological order. Actor/time supports audit review.
-- `Notification(userId, status)` supports a patient's queued/sent inbox. `(caseId, createdAt)` supports the case communication history.
+- `Notification(userId, status)` supports a patient's queued/sent inbox. `(caseId, createdAt)` supports the case communication history. The nullable acknowledgement timestamp distinguishes unread and seen notifications without changing delivery status.
 - `Referral(caseId)` is the required lookup for referral history by case; receiving/sending provider status indexes support provider queues.
 - Patient/provider case indexes support patient history and provider-scoped lists. Referral, appointment, contact attempt, follow-up, consult, consent, explanation, and audit indexes align with their owner/status/time or parent-record lookups.
 - Unique indexes on user email, patient user, synthetic MRN, provider name, and explanation `(caseId, language, createdAt)` prevent duplicate identities and duplicate drafts at the same timestamp for one language.

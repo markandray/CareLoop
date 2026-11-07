@@ -478,6 +478,7 @@ model Notification {
   status      NotificationStatus      @default(QUEUED)
   createdAt   DateTime                @default(now()) @db.Timestamptz(3)
   sentAt      DateTime?               @db.Timestamptz(3)
+  acknowledgedAt DateTime?             @db.Timestamptz(3)
 
   screeningCase ScreeningCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
   user          User          @relation(fields: [userId], references: [id], onDelete: Restrict)

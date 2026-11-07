@@ -52,7 +52,7 @@ export function createNotificationRouter(
         };
         const found = await tx.notification.findMany({
           where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit + 1,
-          select: { id: true, caseId: true, channel: true, language: true, templateKey: true, status: true, createdAt: true, sentAt: true },
+          select: { id: true, caseId: true, channel: true, language: true, templateKey: true, status: true, createdAt: true, sentAt: true, acknowledgedAt: true },
         });
         await record(tx, { actorType: ActorType.USER, actorId: actor.id, action: 'NOTIFICATION_LIST_READ', entityType: 'Notification', entityId: actor.id }, clock);
         return found;
@@ -79,7 +79,7 @@ export function createNotificationRouter(
             screeningCase: { is: caseVisibility({ userId: actor.id, role: actor.role, providerId: actor.providerId }, clock.now()) },
             ...(actor.role === 'PATIENT' ? { userId: actor.id } : {}),
           },
-          select: { id: true, caseId: true, channel: true, language: true, templateKey: true, status: true, createdAt: true, sentAt: true },
+          select: { id: true, caseId: true, channel: true, language: true, templateKey: true, status: true, createdAt: true, sentAt: true, acknowledgedAt: true },
         });
         if (!row) throw AppError.notFound('Notification not found.');
         await record(tx, { actorType: ActorType.USER, actorId: actor.id, action: 'NOTIFICATION_READ', entityType: 'Notification', entityId: id }, clock);
@@ -138,6 +138,7 @@ export function createNotificationRouter(
         if (notification.templateKey === 'result_reviewed' && !caseRecord.acknowledgedAt) {
           await tx.screeningCase.update({ where: { id: notification.caseId }, data: { acknowledgedAt: now } });
         }
+        await tx.notification.update({ where: { id }, data: { acknowledgedAt: now } });
         const event = await appendEvent(tx, { caseId: notification.caseId, type: CaseEventType.NOTIFICATION_ACKNOWLEDGED, actorType: ActorType.USER, actorId: req.user!.id, payload: { notificationId: id } }, clock);
         await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'NOTIFICATION_ACKNOWLEDGED', entityType: 'Notification', entityId: id }, clock);
         const eventWithActor = await tx.caseEvent.findUniqueOrThrow({ where: { id: event.id }, include: { actor: true } });
@@ -152,12 +153,14 @@ export function createNotificationRouter(
   return router;
 }
 
-export function toNotificationDto(row: { id: string; caseId: string; channel: 'PHONE' | 'SMS' | 'EMAIL' | 'PORTAL'; language: 'EN' | 'AR' | 'OTHER'; templateKey: (typeof NotificationTemplateKeySchema.options)[number]; status: 'QUEUED' | 'SENT'; createdAt: Date; sentAt: Date | null }) {
+export function toNotificationDto(row: { id: string; caseId: string; channel: 'PHONE' | 'SMS' | 'EMAIL' | 'PORTAL'; language: 'EN' | 'AR' | 'OTHER'; templateKey: (typeof NotificationTemplateKeySchema.options)[number]; status: 'QUEUED' | 'SENT'; createdAt: Date; sentAt: Date | null; acknowledgedAt?: Date | null }) {
   const template = getNotificationTemplate(row.templateKey, row.language);
   return NotificationDtoSchema.parse({
     id: row.id, caseId: row.caseId, channel: row.channel, language: row.language,
     templateKey: row.templateKey, status: row.status, createdAt: row.createdAt.toISOString(),
-    sentAt: row.sentAt?.toISOString() ?? null, text: template.text,
+    sentAt: row.sentAt?.toISOString() ?? null,
+    acknowledgedAt: row.acknowledgedAt?.toISOString() ?? null,
+    text: template.text,
     reviewNotice: template.reviewNotice,
   });
 }

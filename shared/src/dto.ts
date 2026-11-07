@@ -456,6 +456,7 @@ export const NotificationDtoSchema = StrictObject({
   status: NotificationStatusSchema,
   createdAt: UtcTimestampSchema,
   sentAt: UtcTimestampSchema.nullable(),
+  acknowledgedAt: UtcTimestampSchema.nullable(),
 });
 export type NotificationDto = z.infer<typeof NotificationDtoSchema>;
 
