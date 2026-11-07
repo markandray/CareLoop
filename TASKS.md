@@ -163,6 +163,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: patient case cards, safe case detail/progress, read-only notification center, Dubai date formatting, keyboard and announcement accessibility.
 - Evidence (2026-11-06): implemented and committed on `task/T-302a-patient-portal` in steps 1-6 (`120e529`, `5261d14`, `8e6281e`, `76b7a15`, `8096133`, `77e21c2`). `npm run lint` passes, root `npm run build` completes, and `npm test` passes 226/226 (12 files). Pure tests cover every workflow state/closure reason, closed labels, EN/AR Dubai time with Western digits, and locale parity. No server or shared contract changes. Live browser review of the new screens did not complete: rebuilding the Compose client reset the browser connection. Follow the T-302a checklist in docs/07 for English/Arabic, 360/1280 px, RTL, and keyboard verification before marking complete.
 
+#### [ ] T-302b Patient actions and consent
+- Agent: Codex. Depends: T-302a, T-203, T-206
+- Output: per-notification acknowledgement timestamps, patient notification seen actions, explanation understanding confirmation, care decline confirmation, and provider consent controls.
+- Evidence (2026-11-07): implemented on `task/T-302b-patient-actions` in numbered commits `da697e3`, `9bcf9c0`, `2dd1128`, `b51605a`, `18bb6b4`, `7f46e20`, `4f2a205`, `63861dd`. Additive migration and DTO/API docs included; no new dependency. `npm run lint` passes; `npm test` passes 251/251; two consecutive `npm run test:db` runs pass 197/197 each. Root build compiled Next.js and generated 11 pages, but final command completion/exit was not observed under the no-polling constraint. Browser walkthrough was partial and Compose browser connection reset after rebuild; see docs/07. The final Arabic next-step fallback correction and full keyboard/responsive/error walkthrough remain to verify.
+
 ### [ ] T-303 Doctor dashboard
 - Agent: Antigravity. Depends: T-301, T-105, T-201
 - Output: worklist, case detail, approve summary/next step/urgency, create referral, accept/reject incoming referral, answer consults, sign off closures.

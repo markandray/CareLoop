@@ -28,7 +28,25 @@ Use the seeded English account `patient.en@careloop.local` and Arabic account `p
 5. At **360 px** and **1280 px**, check all three screens in **English and Arabic RTL** for clipping, horizontal page overflow, readable text, and visible focus. Confirm the Demo time banner remains visible when simulated time is active.
 6. Repeat the three screens by keyboard only: Tab/Shift+Tab through links and language controls; Enter to open a case and notification link; confirm route changes focus the page heading; confirm the current progress step is announced and loading/error changes are announced.
 
-**Contract limitation:** `NotificationDto` has no per-notification acknowledgement/read field, and the patient event projection does not include the notification ID. The list badge therefore counts SENT notifications for the matching case as a proxy; it cannot prove unread status. Acknowledgement actions are outside this read-only task.
+### T-302b — Patient actions and consent manual browser checklist
+
+Use `patient.en@careloop.local` and `patient.ar@careloop.local` from the demo account list. Check `/patient`, an available case detail, `/patient/notifications`, and `/patient/consent` in English and Arabic. Repeat each screen at 360 px and 1280 px, including Arabic RTL; use keyboard only for one pass. Confirm the Demo time banner remains visible.
+
+1. On the case list, verify badges count only unacknowledged notifications. On notifications, check unread/seen status, each Mark as seen label (including “I have seen this update” for `result_reviewed`), disabled pending state, seen time, and non-raw error announcements. Trigger a repeat acknowledgement and verify the friendly conflict message.
+2. On case detail, verify “I understand” is available only for a displayed approved explanation, records its explanation ID, then shows a Dubai confirmation time and stays disabled. Confirm the one-sentence distinction from treatment consent. Trigger closed/already-declined conflict handling where demo data allows.
+3. Open the decline dialog. Verify the plain explanation, required 10–300 character reason, disabled invalid confirmation, Confirm/Cancel, Escape close, focus trap, and focus return. Check the recorded state only in a disposable synthetic case; verify 409 copy for already declined/closed cases.
+4. On consent, check each provider’s current status and the explanation of grant/revoke consequences. Grant and revoke only on a disposable synthetic account; verify each change refetches status. Open the revoke dialog and test Cancel/Escape/focus return. Trigger duplicate grant/revoke 409 paths where possible.
+5. Trigger every available validation, network, 401, 403, 404, 409, and 429 path; ensure the patient sees localized safe text without server messages or identifiers. Check route heading focus, page landmarks, keyboard focus visibility, no horizontal overflow, and readable status without colour alone.
+
+T-302b server DB scenarios include `acknowledging one notification timestamps only that notification`, `acknowledging result_reviewed sets acknowledgedAt and preserves workflow state`, `acknowledging consent_needed writes its event and audit but leaves acknowledgedAt null`, `patient cannot acknowledge another patient notification and receives 404`, and `role test routes are absent when the app is built with NODE_ENV=development`. Existing consent scenarios include `patient grants consent, and listing returns it`, `patient revokes consent and revokedAt is set`, `double revoke returns 409`, and `duplicate active grant for the same provider and scope returns 409`.
+
+### T-302b implementation evidence and browser status
+
+On 2026-11-07, `npm run lint` passed; `npm test` passed 251/251 (13 files); two consecutive `npm run test:db` runs each passed 197/197, 0 failures. Root `npm run build` compiled Next.js successfully and generated all 11 static pages; the command remained active during the prescribed one-shot capture, so the final workspace build/exit status was not observed. Vitest pure scenarios cover API error message mapping, action enablement, unread counts, reason length, and i18n parity; no DOM testing library was added.
+
+Browser walkthrough was partial. The tool had previously shown the English patient case list and case detail, including the five-step tracker and decline dialog; Escape closed the dialog and returned focus to its trigger. Arabic RTL case detail was also inspected, exposing an English next-step fallback that was corrected to localized state copy. Consent and notifications pages were inspected in English/Arabic in the earlier session. After rebuilding Compose to load the fix, the browser connection reset; a complete refreshed walkthrough, 1280 px check, and successful mutation/error-path UI walkthrough remain unverified. See the checklist above. Consent grant/revoke and decline submission were not performed on the seeded demo case.
+
+**Contract limitation:** The event timeline label returned by the existing patient events endpoint is English-only, so timeline event labels do not localize with Arabic despite the rest of the patient UI.
 
 ### T-302a implementation evidence and browser status
 

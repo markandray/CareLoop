@@ -83,7 +83,7 @@ function PatientDashboard() {
                   <p className="mt-2 inline-flex rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-800">{item.state === 'CLOSED' ? t(getPatientProgress(item.state, item.closureReason).closureLabel as never) : t(`patient_status_${item.state}`)}</p>
                   <div className="mt-4">
                     <h3 className="text-sm font-semibold text-slate-800">{t('patient_nextStep')}</h3>
-                    <p className="mt-1 text-sm text-slate-700">{item.recommendedNextStep ?? item.statusDescription}</p>
+                    <p className="mt-1 text-sm text-slate-700">{language === 'AR' ? t(`patient_description_${item.state}` as never) : item.recommendedNextStep ?? t(`patient_description_${item.state}` as never)}</p>
                   </div>
                   <p className="mt-4 text-xs text-slate-600">{t('patient_lastUpdate')}: <time dateTime={item.updatedAt}>{formatPatientDateTime(item.updatedAt, language)}</time></p>
                 </Card>
