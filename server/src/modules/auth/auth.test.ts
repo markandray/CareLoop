@@ -330,7 +330,10 @@ describe('T-101 Auth and RBAC test suite', () => {
     await new Promise<void>((resolve) => developmentServer.listen(0, '127.0.0.1', resolve));
     try {
       const address = developmentServer.address() as AddressInfo;
-      const response = await fetch(`http://127.0.0.1:${address.port}/api/v1/test/roles/patient`);
+      const patientToken = jwt.sign({ userId: testUsers.PATIENT.id, role: 'PATIENT' }, TEST_SECRET);
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/v1/test/roles/patient`, {
+        headers: { Cookie: `${AUTH_COOKIE_NAME}=${patientToken}` },
+      });
       assert.equal(response.status, 404);
       const body = await response.json() as { error: { code: string } };
       assert.equal(body.error.code, 'NOT_FOUND');
