@@ -84,6 +84,11 @@ export function canDeclineCare(state: CaseState, alreadyDeclined: boolean, pendi
   return state !== 'CLOSED' && !alreadyDeclined && !pending;
 }
 
+export function isDeclineReasonValid(reason: string): boolean {
+  const length = reason.trim().length;
+  return length >= 10 && length <= 300;
+}
+
 export function canGrantConsent(hasActiveConsent: boolean, pending: boolean): boolean {
   return !hasActiveConsent && !pending;
 }

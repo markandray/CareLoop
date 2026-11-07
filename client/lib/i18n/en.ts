@@ -11,6 +11,7 @@ export const en = {
   arabic: 'العربية',
   unassigned: 'Unassigned',
   close: 'Close',
+  cancel: 'Cancel',
 
   // Demo Time
   demoTimeActive: 'Demo simulated time active',
@@ -141,6 +142,15 @@ export const en = {
   patient_understandingButton: 'I understand',
   patient_understandingPending: 'Saving confirmation…',
   patient_confirmedOn: 'Confirmed on',
+  patient_declineAction: 'I do not wish to continue',
+  patient_declineRecorded: 'Your decision was recorded.',
+  patient_declineDialogTitle: 'Record your decision',
+  patient_declineDialogDescription: 'A clinician will contact you. Nothing is closed automatically. You may change your mind by contacting the clinic.',
+  patient_declineReasonLabel: 'Reason',
+  patient_declineReasonHelp: 'Enter 10 to 300 characters.',
+  patient_declineConfirm: 'Confirm decision',
+  patient_declinePending: 'Recording…',
+  patient_declineConflict: 'This case is already closed or your decision was already recorded. Your care team can help if you need to discuss it.',
   patient_noExplanation: 'Explanation not available yet',
   patient_noExplanationDescription: 'A clinician-approved explanation has not been shared yet.',
   patient_noteNotTranslated: 'Doctor’s note — not translated',

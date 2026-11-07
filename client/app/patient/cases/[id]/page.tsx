@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { z } from 'zod';
@@ -20,7 +20,7 @@ import { useT } from '../../../../lib/i18n/context';
 import { ShellLayout } from '../../../../components/ShellLayout';
 import { ReviewNoticeBanner } from '../../../../components/ReviewNoticeBanner';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../../../components/ui';
-import { canConfirmUnderstanding, formatPatientDateTime, getPatientErrorMessageKey, getPatientProgress, type PatientProgressStep } from '../../../../lib/patient-portal';
+import { canConfirmUnderstanding, canDeclineCare, formatPatientDateTime, getPatientErrorMessageKey, getPatientProgress, isDeclineReasonValid, type PatientProgressStep } from '../../../../lib/patient-portal';
 
 const ExplanationPageSchema = z.object({ items: z.array(ExplanationDtoSchema) }).strict();
 type ExplanationPage = z.infer<typeof ExplanationPageSchema>;
@@ -56,6 +56,12 @@ function PatientCaseDetail() {
   const [error, setError] = useState(false);
   const [understandingPending, setUnderstandingPending] = useState(false);
   const [actionErrorKey, setActionErrorKey] = useState<import('../../../../lib/i18n/en').TranslationKey | null>(null);
+  const [declineRecorded, setDeclineRecorded] = useState(false);
+  const [declinePending, setDeclinePending] = useState(false);
+  const [declineErrorKey, setDeclineErrorKey] = useState<import('../../../../lib/i18n/en').TranslationKey | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const declineDialogRef = useRef<HTMLDialogElement>(null);
+  const declineTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -110,6 +116,30 @@ function PatientCaseDetail() {
     }
   };
 
+  const openDeclineDialog = () => {
+    setDeclineReason('');
+    setDeclineErrorKey(null);
+    declineDialogRef.current?.showModal();
+  };
+
+  const submitDecline = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!detail || !canDeclineCare(detail.state, declineRecorded, declinePending) || !isDeclineReasonValid(declineReason)) return;
+    setDeclinePending(true);
+    setDeclineErrorKey(null);
+    try {
+      await apiFetch(`/api/v1/cases/${encodeURIComponent(caseId)}/decline-care`, {
+        method: 'POST', body: { reason: declineReason.trim() },
+      });
+      setDeclineRecorded(true);
+      declineDialogRef.current?.close();
+    } catch (error) {
+      setDeclineErrorKey(error instanceof ApiError && error.status === 409 ? 'patient_declineConflict' : getPatientErrorMessageKey(error instanceof ApiError ? error.code : 'NETWORK_ERROR', error instanceof ApiError ? error.status : 0));
+    } finally {
+      setDeclinePending(false);
+    }
+  };
+
   return (
     <ShellLayout>
       <div className="space-y-6">
@@ -117,6 +147,7 @@ function PatientCaseDetail() {
         <h1 tabIndex={-1} className="text-2xl font-bold tracking-tight text-slate-900">{t('patient_caseTitle')} {caseId}</h1>
         {error && <ErrorBanner title={t('errorTitle')} message={t('patient_caseError')} />}
         {actionErrorKey && <div aria-live="polite"><ErrorBanner title={t('errorTitle')} message={t(actionErrorKey)} /></div>}
+        {declineErrorKey && !declineDialogRef.current?.open && <div aria-live="polite"><ErrorBanner title={t('errorTitle')} message={t(declineErrorKey)} /></div>}
         {loading ? (
           <div aria-live="polite" className="flex justify-center rounded-xl border border-slate-200 bg-white py-12"><Spinner label={t('loading')} /></div>
         ) : detail ? (
@@ -141,6 +172,30 @@ function PatientCaseDetail() {
               </ol>
               {progress?.closureLabel && <p className="mt-3 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">{t('patient_closedTrackerNotice')}</p>}
             </Card>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-5">
+              <button ref={declineTriggerRef} type="button" disabled={!canDeclineCare(detail.state, declineRecorded, declinePending)} onClick={openDeclineDialog} className="rounded-lg border border-slate-400 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 disabled:cursor-not-allowed disabled:opacity-50">{t('patient_declineAction')}</button>
+              {declineRecorded && <p role="status" className="mt-2 text-sm text-slate-700">{t('patient_declineRecorded')}</p>}
+            </section>
+
+            <dialog ref={declineDialogRef} onClose={() => declineTriggerRef.current?.focus()} aria-labelledby="patient-decline-title" aria-describedby="patient-decline-description" className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl border border-slate-300 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-900/60">
+              <form onSubmit={(event) => void submitDecline(event)} className="space-y-5 p-6">
+                <div>
+                  <h2 id="patient-decline-title" className="text-lg font-semibold">{t('patient_declineDialogTitle')}</h2>
+                  <p id="patient-decline-description" className="mt-2 text-sm leading-6 text-slate-700">{t('patient_declineDialogDescription')}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="patient-decline-reason" className="block text-sm font-medium text-slate-800">{t('patient_declineReasonLabel')}</label>
+                  <textarea id="patient-decline-reason" required minLength={10} maxLength={300} rows={4} value={declineReason} onChange={(event) => setDeclineReason(event.target.value)} className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700" aria-describedby="patient-decline-reason-help" />
+                  <p id="patient-decline-reason-help" className="text-xs text-slate-600">{t('patient_declineReasonHelp')}</p>
+                </div>
+                {declineErrorKey && <div role="alert" aria-live="polite" className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{t(declineErrorKey)}</div>}
+                <div className="flex flex-wrap justify-end gap-3">
+                  <button type="button" onClick={() => declineDialogRef.current?.close()} disabled={declinePending} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 disabled:opacity-50">{t('cancel')}</button>
+                  <button type="submit" disabled={!isDeclineReasonValid(declineReason) || !canDeclineCare(detail.state, declineRecorded, declinePending)} className="rounded-lg border border-rose-800 bg-rose-800 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-700 disabled:cursor-not-allowed disabled:opacity-50">{declinePending ? t('patient_declinePending') : t('patient_declineConfirm')}</button>
+                </div>
+              </form>
+            </dialog>
 
             <Card title={t('patient_explanationTitle')} headingLevel={2}>
               {explanation ? (

@@ -13,6 +13,7 @@ export const ar: Translations = {
   arabic: 'العربية',
   unassigned: 'غير مخصص',
   close: 'إغلاق',
+  cancel: 'إلغاء',
 
   // Demo Time
   demoTimeActive: 'الوقت التجريبي المحاكى نشط',
@@ -143,6 +144,15 @@ export const ar: Translations = {
   patient_understandingButton: 'أفهم',
   patient_understandingPending: 'جارٍ حفظ التأكيد…',
   patient_confirmedOn: 'تم التأكيد في',
+  patient_declineAction: 'لا أرغب في المتابعة',
+  patient_declineRecorded: 'تم تسجيل قرارك.',
+  patient_declineDialogTitle: 'تسجيل قرارك',
+  patient_declineDialogDescription: 'سيتواصل معك طبيب. لن يتم إغلاق أي شيء تلقائياً. يمكنك تغيير رأيك بالتواصل مع العيادة.',
+  patient_declineReasonLabel: 'السبب',
+  patient_declineReasonHelp: 'أدخل من 10 إلى 300 حرف.',
+  patient_declineConfirm: 'تأكيد القرار',
+  patient_declinePending: 'جارٍ التسجيل…',
+  patient_declineConflict: 'هذه الحالة مغلقة بالفعل أو تم تسجيل قرارك مسبقاً. يمكن لفريق الرعاية مساعدتك إذا رغبت في مناقشة الأمر.',
   patient_noExplanation: 'الشرح غير متاح بعد',
   patient_noExplanationDescription: 'لم تتم مشاركة شرح معتمد من الطبيب بعد.',
   patient_noteNotTranslated: 'ملاحظة الطبيب — غير مترجمة',
