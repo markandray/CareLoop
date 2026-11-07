@@ -82,8 +82,8 @@ export function createApp(
   apiV1Router.use('/appointments', createAppointmentRouter(prisma, clock, authenticate));
   apiV1Router.use('/notifications', createNotificationRouter(prisma, clock, authenticate));
 
-  // Development/test-only routes for verifying requireRole matrix and auth behaviors
-  if (env.NODE_ENV !== 'production') {
+  // Role-matrix helpers and custom test hooks must never be present in development or production.
+  if (env.NODE_ENV === 'test') {
     // Matrix test routes: /api/v1/test/roles/:role
     for (const role of RoleSchema.options) {
       apiV1Router.get(

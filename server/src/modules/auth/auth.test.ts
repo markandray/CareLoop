@@ -313,6 +313,32 @@ describe('T-101 Auth and RBAC test suite', () => {
     }
   });
 
+  test('role test routes are absent when the app is built with NODE_ENV=development', async () => {
+    const developmentApp = createApp({
+      prisma,
+      clock,
+      env: {
+        NODE_ENV: 'development',
+        SERVER_PORT: 0,
+        DATABASE_URL: process.env.DATABASE_URL || '',
+        JWT_SECRET: TEST_SECRET,
+        CLIENT_ORIGIN,
+        DEMO_PASSWORD: TEST_PASSWORD,
+      },
+    });
+    const developmentServer = http.createServer(developmentApp);
+    await new Promise<void>((resolve) => developmentServer.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = developmentServer.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/v1/test/roles/patient`);
+      assert.equal(response.status, 404);
+      const body = await response.json() as { error: { code: string } };
+      assert.equal(body.error.code, 'NOT_FOUND');
+    } finally {
+      await new Promise<void>((resolve, reject) => developmentServer.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
   test('7. a token whose user was deleted is rejected (reloaded from DB)', async () => {
     // 1. Create temporary user with unique email
     const tempEmail = `temp.deleted.user.${realSystemTimeMs()}.${Math.random().toString(36).substring(2)}@careloop.test`;
