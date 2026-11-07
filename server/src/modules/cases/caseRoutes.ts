@@ -233,7 +233,9 @@ export function createCaseRouter(
         const event = await appendEvent(tx, { caseId, type: CaseEventType.CARE_DECLINED_BY_PATIENT, actorType: ActorType.USER, actorId: req.user!.id, fromState: row.state, toState: row.state, payload: { reason: req.body.reason } }, clock);
         await record(tx, { actorType: ActorType.USER, actorId: req.user!.id, action: 'CARE_DECLINED_BY_PATIENT', entityType: 'ScreeningCase', entityId: caseId }, clock);
         const withActor = await tx.caseEvent.findUniqueOrThrow({ where: { id: event.id }, include: { actor: true } });
-        return projectPatientCaseEvent(withActor, row.state, row.closureReason);
+        const projected = projectPatientCaseEvent(withActor, row.state, row.closureReason);
+        if (!projected) throw AppError.internal('Care decline event projection was not available.');
+        return projected;
       });
       res.status(200).json({ event: result });
     } catch (error) { next(error); }

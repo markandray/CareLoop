@@ -161,6 +161,14 @@ export const CaseEventTypeSchema = z.enum([
 ]);
 export type CaseEventType = z.infer<typeof CaseEventTypeSchema>;
 
+export const PatientEventLabelKeySchema = z.enum([
+  'CASE_RECEIVED', 'UNDER_REVIEW_COMPLETED', 'UPDATE_SENT', 'UPDATE_VIEWED',
+  'UNDERSTANDING_CONFIRMED', 'CONSENT_GRANTED', 'CONSENT_REVOKED',
+  'REFERRAL_STARTED', 'REFERRAL_ACCEPTED', 'APPOINTMENT_BOOKED',
+  'APPOINTMENT_CHANGED', 'CARE_STARTED', 'CASE_CLOSED', 'CARE_DECLINED_RECORDED',
+]);
+export type PatientEventLabelKey = z.infer<typeof PatientEventLabelKeySchema>;
+
 export const EvidenceKindSchema = z.enum([
   'SCREENING_INTAKE',
   'APPROVED_CLINICAL_PLAN',

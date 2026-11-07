@@ -12,6 +12,7 @@ import {
   CaseDetailDoctorSchema,
   CaseDetailPatientSchema,
   CaseEventDtoPatientSchema,
+  type PatientEventLabelKey,
   CaseEventDtoStaffSchema,
   CaseListItemSchema,
   ReferralPacketSchema,
@@ -120,39 +121,31 @@ const closureCopy: Record<ClosureReason, { label: string; description: string }>
   },
 };
 
-const patientEventLabels: Record<CaseEventType, string> = {
-  CASE_CREATED: 'Screening case received',
-  CASE_REVIEWED: 'Doctor reviewed your screening result',
-  CONFIRMATION_REQUESTED: 'Confirmatory testing requested',
-  REFERRAL_CREATED: 'Referral started',
-  CASE_CLOSED: 'Care case closed',
-  REFERRAL_ACCEPTED: 'Referral accepted',
-  REFERRAL_REASSIGNED: 'Referral updated',
-  APPOINTMENT_SCHEDULED: 'Appointment scheduled',
-  CARE_STARTED: 'Care started',
-  APPOINTMENT_RESCHEDULED: 'Appointment rescheduled',
-  OWNER_ASSIGNED: 'Care team assigned',
-  NOTIFICATION_QUEUED: 'A care update is being prepared',
-  NOTIFICATION_SENT: 'Care update sent',
-  NOTIFICATION_ACKNOWLEDGED: 'Care update viewed',
-  UNDERSTANDING_CONFIRMED: 'You confirmed you understand the explanation',
-  CARE_DECLINED_BY_PATIENT: 'Care choice recorded',
-  EXPLANATION_GENERATED: 'Patient explanation prepared',
-  EXPLANATION_APPROVED: 'Patient explanation approved',
-  CONFIRMATORY_RESULT_RECORDED: 'Confirmatory result recorded',
-  APPOINTMENT_ATTENDED: 'Appointment attendance recorded',
-  APPOINTMENT_MISSED: 'Appointment update recorded',
-  CONTACT_ATTEMPT_LOGGED: 'Care team recorded a contact attempt',
-  REFERRAL_REJECTED: 'Referral response recorded',
-  CONSULT_REQUESTED: 'Question sent to the care team',
-  CONSULT_ANSWERED: 'Care team answered a question',
-  ESCALATION_RAISED: 'Care team follow-up updated',
-  ESCALATION_CLEARED: 'Care team follow-up updated',
-  CONSENT_GRANTED: 'Information-sharing consent granted',
-  CONSENT_REVOKED: 'Information-sharing consent withdrawn',
-  DELAY_REASON_RECORDED: 'Care coordination update recorded',
-  CLOSURE_PROPOSED: 'Case closure review requested',
+export const patientEventLabelByType: Partial<Record<CaseEventType, PatientEventLabelKey>> = {
+  CASE_CREATED: 'CASE_RECEIVED',
+  CASE_REVIEWED: 'UNDER_REVIEW_COMPLETED',
+  NOTIFICATION_SENT: 'UPDATE_SENT',
+  NOTIFICATION_ACKNOWLEDGED: 'UPDATE_VIEWED',
+  UNDERSTANDING_CONFIRMED: 'UNDERSTANDING_CONFIRMED',
+  CONSENT_GRANTED: 'CONSENT_GRANTED',
+  CONSENT_REVOKED: 'CONSENT_REVOKED',
+  REFERRAL_CREATED: 'REFERRAL_STARTED',
+  REFERRAL_ACCEPTED: 'REFERRAL_ACCEPTED',
+  APPOINTMENT_SCHEDULED: 'APPOINTMENT_BOOKED',
+  APPOINTMENT_RESCHEDULED: 'APPOINTMENT_CHANGED',
+  CARE_STARTED: 'CARE_STARTED',
+  CASE_CLOSED: 'CASE_CLOSED',
+  CARE_DECLINED_BY_PATIENT: 'CARE_DECLINED_RECORDED',
 };
+
+export const hiddenPatientEventTypes: CaseEventType[] = [
+  'CONFIRMATION_REQUESTED', 'REFERRAL_REASSIGNED', 'OWNER_ASSIGNED',
+  'NOTIFICATION_QUEUED', 'EXPLANATION_GENERATED', 'EXPLANATION_APPROVED',
+  'CONFIRMATORY_RESULT_RECORDED', 'APPOINTMENT_ATTENDED', 'APPOINTMENT_MISSED',
+  'CONTACT_ATTEMPT_LOGGED', 'REFERRAL_REJECTED', 'CONSULT_REQUESTED',
+  'CONSULT_ANSWERED', 'ESCALATION_RAISED', 'ESCALATION_CLEARED',
+  'DELAY_REASON_RECORDED', 'CLOSURE_PROPOSED',
+];
 
 export function projectCaseForActor(
   row: CaseProjectionRecord,
@@ -188,9 +181,10 @@ export function projectCaseForActor(
         recommendedNextStep: row.recommendedNextStep,
         referrals,
         appointments,
-        events: row.events.map((event) =>
-          projectPatientCaseEvent(event, row.state, row.closureReason),
-        ),
+        events: row.events.flatMap((event) => {
+          const projected = projectPatientCaseEvent(event, row.state, row.closureReason);
+          return projected ? [projected] : [];
+        }),
       });
     }
     case 'DOCTOR':
@@ -306,15 +300,16 @@ export function projectPatientCaseEvent(
   event: CaseProjectionRecord['events'][number],
   currentState: CaseState,
   closureReason: ClosureReason | null,
-): CaseEventDtoPatient {
-  const eventState = event.toState ?? currentState;
+): CaseEventDtoPatient | null {
+  const labelKey = patientEventLabelByType[event.type];
+  if (!labelKey) return null;
   const patientCopy =
-    eventState === 'CLOSED' && closureReason
+    currentState === 'CLOSED' && closureReason
       ? closureCopy[closureReason]
-      : stateCopy[eventState];
+      : stateCopy[currentState];
   return CaseEventDtoPatientSchema.parse({
     id: event.id,
-    label: patientEventLabels[event.type],
+    labelKey,
     timestamp: event.createdAt.toISOString(),
     patientStatus: patientCopy.label,
   });

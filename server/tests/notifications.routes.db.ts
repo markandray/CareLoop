@@ -166,8 +166,8 @@ test('acknowledging result_reviewed sets acknowledgedAt and preserves workflow s
   const notification = await makeNotification(item.id, patientUserId(patientOne), 'result_reviewed', 'SENT');
   const response = await request('PATIENT', 'POST', `/notifications/${notification.id}/acknowledge`, {});
   assert.equal(response.status, 200);
-  const responseBody = await response.json() as { event: { id: string; label: string; timestamp: string; patientStatus: string; type?: string } };
-  assert.equal(responseBody.event.label, 'Care update viewed');
+  const responseBody = await response.json() as { event: { id: string; labelKey: string; timestamp: string; patientStatus: string; type?: string } };
+  assert.equal(responseBody.event.labelKey, 'UPDATE_VIEWED');
   assert.equal(responseBody.event.timestamp, now.toISOString());
   assert.equal('type' in responseBody.event, false);
   const after = await prisma.screeningCase.findUniqueOrThrow({ where: { id: item.id } });

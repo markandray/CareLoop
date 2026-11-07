@@ -208,5 +208,19 @@ export const ar: Translations = {
   reviewNotice_unreviewedText:
     'المحتوى المترجم إلى العربية ناتج عن ترجمة آلية ولم يخضع للمراجعة السريرية.',
   reviewNotice_dismiss: 'إغلاق',
+  patient_event_CASE_RECEIVED: 'تم استلام حالة الفحص',
+  patient_event_UNDER_REVIEW_COMPLETED: 'اكتملت المراجعة',
+  patient_event_UPDATE_SENT: 'تم إرسال تحديث',
+  patient_event_UPDATE_VIEWED: 'تمت مشاهدة التحديث',
+  patient_event_UNDERSTANDING_CONFIRMED: 'تم تسجيل تأكيد قراءة الشرح',
+  patient_event_CONSENT_GRANTED: 'تم منح الموافقة على مشاركة المعلومات',
+  patient_event_CONSENT_REVOKED: 'تم إلغاء الموافقة على مشاركة المعلومات',
+  patient_event_REFERRAL_STARTED: 'بدأت الإحالة',
+  patient_event_REFERRAL_ACCEPTED: 'تم قبول الإحالة',
+  patient_event_APPOINTMENT_BOOKED: 'تم حجز الموعد',
+  patient_event_APPOINTMENT_CHANGED: 'تم تغيير الموعد',
+  patient_event_CARE_STARTED: 'بدأت الرعاية',
+  patient_event_CASE_CLOSED: 'تم إغلاق الحالة',
+  patient_event_CARE_DECLINED_RECORDED: 'تم تسجيل قرار الرعاية',
 };
 

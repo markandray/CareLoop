@@ -8,6 +8,7 @@ import {
   type CaseDetailPatient,
   type CaseEventPatientListItem,
   type CaseEventPatientCursorPage,
+  type PatientEventLabelKey,
   CaseEventDtoPatientSchema,
   CaseDetailPatientSchema,
   ConfirmUnderstandingRequestSchema,
@@ -28,6 +29,23 @@ const UnderstandingResponseSchema = z.object({ case: CaseDetailPatientSchema, ev
 type UnderstandingResponse = z.infer<typeof UnderstandingResponseSchema>;
 
 const steps: PatientProgressStep[] = ['review', 'plan', 'referral', 'appointment', 'care'];
+
+const patientEventTranslationKey: Record<PatientEventLabelKey, string> = {
+  CASE_RECEIVED: 'patient_event_CASE_RECEIVED',
+  UNDER_REVIEW_COMPLETED: 'patient_event_UNDER_REVIEW_COMPLETED',
+  UPDATE_SENT: 'patient_event_UPDATE_SENT',
+  UPDATE_VIEWED: 'patient_event_UPDATE_VIEWED',
+  UNDERSTANDING_CONFIRMED: 'patient_event_UNDERSTANDING_CONFIRMED',
+  CONSENT_GRANTED: 'patient_event_CONSENT_GRANTED',
+  CONSENT_REVOKED: 'patient_event_CONSENT_REVOKED',
+  REFERRAL_STARTED: 'patient_event_REFERRAL_STARTED',
+  REFERRAL_ACCEPTED: 'patient_event_REFERRAL_ACCEPTED',
+  APPOINTMENT_BOOKED: 'patient_event_APPOINTMENT_BOOKED',
+  APPOINTMENT_CHANGED: 'patient_event_APPOINTMENT_CHANGED',
+  CARE_STARTED: 'patient_event_CARE_STARTED',
+  CASE_CLOSED: 'patient_event_CASE_CLOSED',
+  CARE_DECLINED_RECORDED: 'patient_event_CARE_DECLINED_RECORDED',
+};
 
 async function loadAllEvents(caseId: string): Promise<CaseEventPatientListItem[]> {
   const items: CaseEventPatientListItem[] = [];
@@ -229,7 +247,10 @@ function PatientCaseDetail() {
 
             <section aria-labelledby="patient-timeline-heading">
               <h2 id="patient-timeline-heading" className="mb-3 text-lg font-semibold text-slate-900">{t('patient_timelineTitle')}</h2>
-              {events.length ? <ol className="space-y-3 border-s-2 border-slate-300 ps-4">{events.map((event) => <li key={event.id} className="rounded-lg border border-slate-200 bg-white p-4"><p className="text-sm font-medium text-slate-900">{event.label}</p><time className="mt-1 block text-xs text-slate-600" dateTime={event.timestamp}>{formatPatientDateTime(event.timestamp, language)}</time></li>)}</ol> : <EmptyState title={t('patient_noEvents')} />}
+              {events.length ? <ol className="space-y-3 border-s-2 border-slate-300 ps-4">{events.map((event) => {
+                const translationKey = patientEventTranslationKey[event.labelKey];
+                return translationKey ? <li key={event.id} className="rounded-lg border border-slate-200 bg-white p-4"><p className="text-sm font-medium text-slate-900">{t(translationKey as never)}</p><time className="mt-1 block text-xs text-slate-600" dateTime={event.timestamp}>{formatPatientDateTime(event.timestamp, language)}</time></li> : null;
+              })}</ol> : <EmptyState title={t('patient_noEvents')} />}
             </section>
           </>
         ) : null}

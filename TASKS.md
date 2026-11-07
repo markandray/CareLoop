@@ -168,6 +168,11 @@ Branch naming: `task/T-xxx-short-name`. Owner reviews and merges.
 - Output: per-notification acknowledgement timestamps, patient notification seen actions, explanation understanding confirmation, care decline confirmation, and provider consent controls.
 - Evidence (2026-11-07): implemented on `task/T-302b-patient-actions` in numbered commits `da697e3`, `9bcf9c0`, `2dd1128`, `b51605a`, `18bb6b4`, `7f46e20`, `4f2a205`, `63861dd`. Additive migration and DTO/API docs included; no new dependency. `npm run lint` passes; `npm test` passes 251/251; two consecutive `npm run test:db` runs pass 197/197 each. Root build compiled Next.js and generated 11 pages, but final command completion/exit was not observed under the no-polling constraint. Browser walkthrough was partial and Compose browser connection reset after rebuild; see docs/07. The final Arabic next-step fallback correction and full keyboard/responsive/error walkthrough remain to verify.
 
+#### [ ] T-302c Patient timeline labels and event visibility
+- Agent: Codex. Depends: T-302a, T-203
+- Output: closed patient event label enum, allowlist projection, localized timeline labels, and filtered patient pagination; staff event DTO unchanged.
+- Evidence (2026-11-07): implementation on `task/T-302c-patient-timeline`. `npm run lint` passes; `npm test` passes 253/253 (14 files); two consecutive `npm run test:db` runs pass 201/201 each. Added named allowlist completeness, hidden-event redaction, escalation timeline equality, and pagination stability DB coverage. Root build output compiled Next.js, generated static pages, and reached server Prisma generation/shared TypeScript compilation without a logged error; the final process exit was not captured under the no-polling rule. See docs/07 for named test evidence and remaining manual RTL walkthrough.
+
 ### [ ] T-303 Doctor dashboard
 - Agent: Antigravity. Depends: T-301, T-105, T-201
 - Output: worklist, case detail, approve summary/next step/urgency, create referral, accept/reject incoming referral, answer consults, sign off closures.

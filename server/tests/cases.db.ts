@@ -197,6 +197,68 @@ test('patient event DTO contains no payload or actor identifiers', async () => {
   assert.equal('secret' in dto, false);
 });
 
+test('patient never receives hidden process events, actor identifiers, or payloads', async () => {
+  const hiddenTypes: CaseEventType[] = ['ESCALATION_RAISED', 'OWNER_ASSIGNED', 'DELAY_REASON_RECORDED', 'CONTACT_ATTEMPT_LOGGED', 'NOTIFICATION_QUEUED', 'EXPLANATION_GENERATED', 'EXPLANATION_APPROVED', 'REFERRAL_REJECTED', 'REFERRAL_REASSIGNED', 'APPOINTMENT_MISSED', 'CLOSURE_PROPOSED'];
+  const hiddenIds = new Set<string>();
+  for (const type of hiddenTypes) {
+    const row = await prisma.$transaction((tx) => appendEvent(tx, {
+      caseId: patientACaseB, type, actorType: ActorType.USER, actorId: doctorAId,
+      payload: { internalSecret: type },
+    }, clock));
+    hiddenIds.add(row.id);
+  }
+  const page = await listCaseEvents(dependencies, actor(patientAUserId, 'PATIENT', null), patientACaseB, { limit: 100 });
+  assert.equal(page.items.some((item) => hiddenIds.has(item.id)), false);
+  for (const item of page.items) {
+    assert.equal('actorId' in item, false);
+    assert.equal('payload' in item, false);
+    assert.equal('type' in item, false);
+  }
+});
+
+test('patient timeline stays identical when only escalation events are added', async () => {
+  const patient = actor(patientAUserId, 'PATIENT', null);
+  const before = await listCaseEvents(dependencies, patient, patientACaseA, { limit: 100 });
+  await prisma.$transaction((tx) => appendEvent(tx, {
+    caseId: patientACaseA, type: CaseEventType.ESCALATION_RAISED,
+    actorType: ActorType.SYSTEM, actorId: null, payload: { level: 'LEVEL_1' },
+  }, clock));
+  const after = await listCaseEvents(dependencies, patient, patientACaseA, { limit: 100 });
+  assert.deepEqual(after.items, before.items);
+});
+
+test('patient event entries carry the current patient-facing case status', async () => {
+  await prisma.$transaction((tx) => appendEvent(tx, {
+    caseId: patientACaseB, type: CaseEventType.CASE_REVIEWED,
+    actorType: ActorType.SYSTEM, actorId: null, toState: CaseState.CLINICIAN_REVIEWED,
+    payload: {},
+  }, clock));
+  const page = await listCaseEvents(dependencies, actor(patientAUserId, 'PATIENT', null), patientACaseB, { limit: 100 });
+  assert.ok(page.items.length > 0);
+  assert.ok(page.items.every((item) => item.patientStatus === 'Under clinical review'));
+});
+
+test('patient event pagination skips hidden events without empty pages or duplicates', async () => {
+  const caseId = patientACaseB;
+  for (const type of ['NOTIFICATION_QUEUED', 'NOTIFICATION_SENT', 'OWNER_ASSIGNED', 'UNDERSTANDING_CONFIRMED', 'APPOINTMENT_MISSED', 'CASE_REVIEWED', 'ESCALATION_RAISED', 'REFERRAL_CREATED'] as const) {
+    await prisma.$transaction((tx) => appendEvent(tx, {
+      caseId, type, actorType: ActorType.SYSTEM, actorId: null, payload: { marker: type },
+    }, clock));
+  }
+  const patient = actor(patientAUserId, 'PATIENT', null);
+  const allVisible = await listCaseEvents(dependencies, patient, caseId, { limit: 100 });
+  const collected: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await listCaseEvents(dependencies, patient, caseId, { limit: 2, cursor });
+    assert.ok(page.items.length > 0);
+    collected.push(...page.items.map((item) => item.id));
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  assert.deepEqual(collected, allVisible.items.map((item) => item.id));
+  assert.equal(new Set(collected).size, collected.length);
+});
+
 test('createCase writes case, intake evidence, event, and audit with sequence ID and clock timestamps', async () => {
   const evidence = createEvidence(patientAId, providerAId, doctorAId);
   const result = await createCase(

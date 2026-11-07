@@ -324,7 +324,7 @@ describe('transition API contract', () => {
   it('rejects staff-only fields from patient event DTOs', () => {
     const patientEvent = {
       id,
-      label: 'Referral accepted',
+      labelKey: 'REFERRAL_ACCEPTED',
       timestamp,
       patientStatus: 'Your referral was accepted.',
     };
