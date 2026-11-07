@@ -46,7 +46,21 @@ On 2026-11-07, `npm run lint` passed; `npm test` passed 251/251 (13 files); two 
 
 Browser walkthrough was partial. The tool had previously shown the English patient case list and case detail, including the five-step tracker and decline dialog; Escape closed the dialog and returned focus to its trigger. Arabic RTL case detail was also inspected, exposing an English next-step fallback that was corrected to localized state copy. Consent and notifications pages were inspected in English/Arabic in the earlier session. After rebuilding Compose to load the fix, the browser connection reset; a complete refreshed walkthrough, 1280 px check, and successful mutation/error-path UI walkthrough remain unverified. See the checklist above. Consent grant/revoke and decline submission were not performed on the seeded demo case.
 
-**Contract limitation:** The event timeline label returned by the existing patient events endpoint is English-only, so timeline event labels do not localize with Arabic despite the rest of the patient UI.
+
+
+### T-302c — Patient timeline label browser checklist
+
+Use both demo patients and open each patient case timeline in English and Arabic RTL. Verify labels are localized, timestamps are unchanged, and unknown labels produce no event text. Compare a case before and after escalation and confirm the patient timeline is unchanged. Walk the event list through multiple pages with intervening hidden events; verify no empty page, duplicate, internal process event, actor name/ID, payload, or server-provided free text appears. Staff timeline projections should remain unchanged.
+
+Named T-302c tests: `makes an explicit visibility decision for every case event type`, `keeps internal process events explicitly hidden`, `patient never receives hidden process events, actor identifiers, or payloads`, `patient timeline stays identical when only escalation events are added`, `patient event entries carry the current patient-facing case status`, `patient event pagination skips hidden events without empty pages or duplicates`. Existing i18n parity test also verifies all newly added `patient_event_*` English and Arabic keys.
+
+T-302c spec note: the API continues to include the case’s current patient-facing status with each visible event; it removes free-text event labels and supplies stable label keys for localization. A missed appointment does not produce a timeline event; current case status communicates present progress.
+
+### T-302c implementation and verification evidence
+
+`npm run lint` passed. `npm test` passed 253/253 tests across 14 files. Two consecutive final `npm run test:db` runs each passed 201/201 tests with 0 failures. New named tests: `makes an explicit visibility decision for every case event type`, `keeps internal process events explicitly hidden`, `patient never receives hidden process events, actor identifiers, or payloads`, `patient timeline stays identical when only escalation events are added`, `patient event entries carry the current patient-facing case status`, and `patient event pagination skips hidden events without empty pages or duplicates`. Existing shared locale-parity test covers the full EN/AR dictionaries, including every patient timeline key.
+
+Root build: Next.js compiled and generated all 11 static pages. The final build run compiled Next.js and generated all 11 pages; its last captured output reached the server Prisma generation and shared TypeScript build with no error shown. The process exit status was not captured because builds are not polled. Browser verification was not run for this patch. Complete the checklist above before claiming responsive and RTL browser validation.
 
 ### T-302a implementation evidence and browser status
 
