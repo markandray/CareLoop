@@ -275,6 +275,41 @@ export async function listCaseEvents(
     });
     if (!parent) throw AppError.notFound('Case not found.');
 
+    if (actor.role === 'PATIENT') {
+      const items: NonNullable<ReturnType<typeof projectPatientCaseEvent>>[] = [];
+      let scanCursor = cursor;
+      let hasMore = false;
+      while (!hasMore) {
+        const scanned = await tx.caseEvent.findMany({
+          where: { AND: [{ caseId: parent.id }, ...(scanCursor ? [eventCursorWhere(scanCursor, 'asc')] : [])] },
+          include: { actor: true },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          take: 100,
+        });
+        if (scanned.length === 0) break;
+        for (const event of scanned) {
+          scanCursor = { createdAt: event.createdAt, id: event.id };
+          const projected = projectPatientCaseEvent(event, parent.state, parent.closureReason);
+          if (!projected) continue;
+          if (items.length === parsed.limit) { hasMore = true; break; }
+          items.push(projected);
+        }
+        if (scanned.length < 100) break;
+      }
+      await writeAudit(dependencies)(tx, {
+        actorType: ActorType.USER,
+        actorId: actor.userId,
+        action: 'CASE_READ',
+        entityType: 'ScreeningCase',
+        entityId: parent.id,
+      }, dependencies.clock);
+      return CaseEventPatientCursorPageSchema.parse({
+        items,
+        nextCursor: hasMore && items.length ? encodeCursor({ id: items.at(-1)!.id, createdAt: new Date(items.at(-1)!.timestamp) }) : null,
+        updatedAt: dependencies.clock.now().toISOString(),
+      });
+    }
+
     const clauses: Prisma.CaseEventWhereInput[] = [{ caseId: parent.id }];
     if (cursor) clauses.push(eventCursorWhere(cursor, 'asc'));
     const events = await tx.caseEvent.findMany({
@@ -296,15 +331,6 @@ export async function listCaseEvents(
     );
     const page = pageRows(events, parsed.limit);
     const updatedAt = dependencies.clock.now().toISOString();
-    if (actor.role === 'PATIENT') {
-      return CaseEventPatientCursorPageSchema.parse({
-        items: page.items.map((event) =>
-          projectPatientCaseEvent(event, parent.state, parent.closureReason),
-        ),
-        nextCursor: page.nextCursor,
-        updatedAt,
-      });
-    }
     return CaseEventStaffCursorPageSchema.parse({
       items: page.items.map((event) => {
         const dto = projectStaffCaseEvent(event);

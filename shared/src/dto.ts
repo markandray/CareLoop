@@ -19,6 +19,7 @@ import {
   LanguageSchema,
   NotificationStatusSchema,
   NotificationTemplateKeySchema,
+  PatientEventLabelKeySchema,
   ProviderTypeSchema,
   ReferralStatusSchema,
   RoleSchema,
@@ -196,7 +197,7 @@ export type CaseEventSummary = z.infer<typeof CaseEventSummarySchema>;
 
 export const CaseEventDtoPatientSchema = StrictObject({
   id: UuidSchema,
-  label: z.string(),
+  labelKey: PatientEventLabelKeySchema,
   timestamp: UtcTimestampSchema,
   patientStatus: z.string(),
 });
