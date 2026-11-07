@@ -8,20 +8,24 @@ import {
   type CaseDetailPatient,
   type CaseEventPatientListItem,
   type CaseEventPatientCursorPage,
+  CaseEventDtoPatientSchema,
   CaseDetailPatientSchema,
+  ConfirmUnderstandingRequestSchema,
   CaseEventPatientCursorPageSchema,
   ExplanationDtoSchema,
 } from '@careloop/shared';
-import { apiFetch } from '../../../../lib/api';
+import { ApiError, apiFetch } from '../../../../lib/api';
 import { RoleGuard } from '../../../../lib/session';
 import { useT } from '../../../../lib/i18n/context';
 import { ShellLayout } from '../../../../components/ShellLayout';
 import { ReviewNoticeBanner } from '../../../../components/ReviewNoticeBanner';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../../../components/ui';
-import { formatPatientDateTime, getPatientProgress, type PatientProgressStep } from '../../../../lib/patient-portal';
+import { canConfirmUnderstanding, formatPatientDateTime, getPatientErrorMessageKey, getPatientProgress, type PatientProgressStep } from '../../../../lib/patient-portal';
 
 const ExplanationPageSchema = z.object({ items: z.array(ExplanationDtoSchema) }).strict();
 type ExplanationPage = z.infer<typeof ExplanationPageSchema>;
+const UnderstandingResponseSchema = z.object({ case: CaseDetailPatientSchema, event: CaseEventDtoPatientSchema }).strict();
+type UnderstandingResponse = z.infer<typeof UnderstandingResponseSchema>;
 
 const steps: PatientProgressStep[] = ['review', 'plan', 'referral', 'appointment', 'care'];
 
@@ -50,6 +54,8 @@ function PatientCaseDetail() {
   const [events, setEvents] = useState<CaseEventPatientListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [understandingPending, setUnderstandingPending] = useState(false);
+  const [actionErrorKey, setActionErrorKey] = useState<import('../../../../lib/i18n/en').TranslationKey | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -88,12 +94,29 @@ function PatientCaseDetail() {
     ?? detail?.referrals[0];
   const appointment = [...(detail?.appointments ?? [])].sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt))[0];
 
+  const confirmUnderstanding = async () => {
+    if (!explanation || !canConfirmUnderstanding(explanation, detail?.understandingConfirmedAt, understandingPending)) return;
+    setUnderstandingPending(true);
+    setActionErrorKey(null);
+    try {
+      const result = await apiFetch<UnderstandingResponse>(`/api/v1/cases/${encodeURIComponent(caseId)}/understanding`, {
+        method: 'POST', body: ConfirmUnderstandingRequestSchema.parse({ explanationId: explanation.id }), schema: UnderstandingResponseSchema,
+      });
+      setDetail(result.case);
+    } catch (error) {
+      setActionErrorKey(getPatientErrorMessageKey(error instanceof ApiError ? error.code : 'NETWORK_ERROR', error instanceof ApiError ? error.status : 0));
+    } finally {
+      setUnderstandingPending(false);
+    }
+  };
+
   return (
     <ShellLayout>
       <div className="space-y-6">
         <p><Link href="/patient" className="text-sm font-medium text-teal-800 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">{t('patient_backToCases')}</Link></p>
         <h1 tabIndex={-1} className="text-2xl font-bold tracking-tight text-slate-900">{t('patient_caseTitle')} {caseId}</h1>
         {error && <ErrorBanner title={t('errorTitle')} message={t('patient_caseError')} />}
+        {actionErrorKey && <div aria-live="polite"><ErrorBanner title={t('errorTitle')} message={t(actionErrorKey)} /></div>}
         {loading ? (
           <div aria-live="polite" className="flex justify-center rounded-xl border border-slate-200 bg-white py-12"><Spinner label={t('loading')} /></div>
         ) : detail ? (
@@ -130,6 +153,14 @@ function PatientCaseDetail() {
                       <p className="mt-2 whitespace-pre-line text-sm text-slate-700">{explanation.doctorNoteSection.text}</p>
                     </aside>
                   )}
+                  <div className="space-y-3 border-t border-slate-100 pt-4">
+                    <p className="text-sm text-slate-700">{t('patient_understandingHelp')}</p>
+                    {detail.understandingConfirmedAt ? (
+                      <p className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">{t('patient_confirmedOn')} <time dateTime={detail.understandingConfirmedAt}>{formatPatientDateTime(detail.understandingConfirmedAt, language)}</time></p>
+                    ) : (
+                      <button type="button" onClick={() => void confirmUnderstanding()} disabled={!canConfirmUnderstanding(explanation, detail.understandingConfirmedAt, understandingPending)} className="rounded-lg border border-teal-800 bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{understandingPending ? t('patient_understandingPending') : t('patient_understandingButton')}</button>
+                    )}
+                  </div>
                 </div>
               ) : <EmptyState title={t('patient_noExplanation')} description={t('patient_noExplanationDescription')} />}
             </Card>
