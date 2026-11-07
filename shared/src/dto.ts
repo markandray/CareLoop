@@ -460,6 +460,12 @@ export const NotificationDtoSchema = StrictObject({
 });
 export type NotificationDto = z.infer<typeof NotificationDtoSchema>;
 
+export const AcknowledgeNotificationResponseSchema = StrictObject({
+  acknowledgedAt: UtcTimestampSchema,
+  event: CaseEventDtoPatientSchema,
+});
+export type AcknowledgeNotificationResponse = z.infer<typeof AcknowledgeNotificationResponseSchema>;
+
 export const ConsultDtoSchema = StrictObject({
   id: UuidSchema,
   caseId: CaseIdSchema,

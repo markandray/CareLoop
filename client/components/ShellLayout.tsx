@@ -9,6 +9,8 @@ import { getProviderName } from '../lib/providers';
 import { PatientLanguageToggle } from '../lib/i18n/context';
 import { useT } from '../lib/i18n/context';
 import { DemoClockBanner } from './DemoClockBanner';
+import { countUnreadNotifications } from '../lib/patient-portal';
+import { loadPatientNotifications, PATIENT_NOTIFICATIONS_CHANGED_EVENT } from '../lib/patient-notifications';
 
 interface NavItem {
   label: string;
@@ -20,7 +22,7 @@ const ROLE_NAV_ITEMS: Record<Role, NavItem[]> = {
   PATIENT: [
     { label: 'Cases & Care Status', href: '/patient' },
     { label: 'Notifications', href: '/patient/notifications' },
-    { label: 'Data Consent', href: '/patient/consent', isPlanned: true },
+    { label: 'Data Consent', href: '/patient/consent' },
     { label: 'Clinical Consults', href: '/patient/consults', isPlanned: true },
   ],
   DOCTOR: [
@@ -56,6 +58,7 @@ export function ShellLayout({
   const pathname = usePathname();
   const [providerName, setProviderName] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -70,6 +73,27 @@ export function ShellLayout({
       isMounted = false;
     };
   }, [user?.providerId]);
+
+  useEffect(() => {
+    if (user?.role !== 'PATIENT') {
+      setUnreadCount(0);
+      return;
+    }
+    let isMounted = true;
+    const refreshUnread = () => {
+      void loadPatientNotifications().then((items) => {
+        if (isMounted) setUnreadCount(countUnreadNotifications(items));
+      }).catch(() => {
+        if (isMounted) setUnreadCount(0);
+      });
+    };
+    refreshUnread();
+    window.addEventListener(PATIENT_NOTIFICATIONS_CHANGED_EVENT, refreshUnread);
+    return () => {
+      isMounted = false;
+      window.removeEventListener(PATIENT_NOTIFICATIONS_CHANGED_EVENT, refreshUnread);
+    };
+  }, [pathname, user?.id, user?.role]);
 
   useEffect(() => {
     document.querySelector<HTMLElement>('main h1[tabindex="-1"]')?.focus();
@@ -169,6 +193,8 @@ export function ShellLayout({
                   ? t('nav_casesAndTracker')
                   : user.role === 'PATIENT' && item.href === '/patient/notifications'
                     ? t('nav_notifications')
+                    : user.role === 'PATIENT' && item.href === '/patient/consent'
+                      ? t('nav_consent')
                     : item.label;
                 return (
                   <div key={item.href}>
@@ -182,6 +208,7 @@ export function ShellLayout({
                     ) : (
                       <Link
                         href={item.href}
+                        aria-label={user.role === 'PATIENT' && item.href === '/patient/notifications' && unreadCount > 0 ? `${label}, ${unreadCount} ${t('patient_unreadBadge')}` : undefined}
                         className={`flex items-center justify-between rounded-lg ps-3 pe-3 py-2 text-sm font-medium transition-colors ${
                           isActive
                             ? 'bg-teal-50 text-teal-800 font-semibold'
@@ -189,6 +216,7 @@ export function ShellLayout({
                         }`}
                       >
                         <span>{label}</span>
+                        {user.role === 'PATIENT' && item.href === '/patient/notifications' && unreadCount > 0 && <span className="rounded-full border border-slate-400 px-2 py-0.5 text-xs font-semibold">{unreadCount}</span>}
                         {isActive && (
                           <span className="h-1.5 w-1.5 rounded-full bg-teal-600" />
                         )}
@@ -239,6 +267,8 @@ export function ShellLayout({
                     ? t('nav_casesAndTracker')
                     : user.role === 'PATIENT' && item.href === '/patient/notifications'
                       ? t('nav_notifications')
+                      : user.role === 'PATIENT' && item.href === '/patient/consent'
+                        ? t('nav_consent')
                       : item.label;
                   return (
                     <div key={item.href}>
@@ -253,6 +283,7 @@ export function ShellLayout({
                         <Link
                           href={item.href}
                           onClick={() => setMobileMenuOpen(false)}
+                          aria-label={user.role === 'PATIENT' && item.href === '/patient/notifications' && unreadCount > 0 ? `${label}, ${unreadCount} ${t('patient_unreadBadge')}` : undefined}
                           className={`flex items-center justify-between rounded-lg ps-3 pe-3 py-2 text-sm font-medium ${
                             isActive
                               ? 'bg-teal-50 text-teal-800 font-semibold'
@@ -260,6 +291,7 @@ export function ShellLayout({
                           }`}
                         >
                           <span>{label}</span>
+                          {user.role === 'PATIENT' && item.href === '/patient/notifications' && unreadCount > 0 && <span className="rounded-full border border-slate-400 px-2 py-0.5 text-xs font-semibold">{unreadCount}</span>}
                           {isActive && (
                             <span className="h-1.5 w-1.5 rounded-full bg-teal-600" />
                           )}

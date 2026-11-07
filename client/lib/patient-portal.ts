@@ -1,4 +1,5 @@
-import type { CaseState, ClosureReason, Language } from '@careloop/shared';
+import type { ApiErrorCode, CaseState, ClosureReason, Language, NotificationDto } from '@careloop/shared';
+import type { TranslationKey } from './i18n/en';
 
 export type PatientProgressStep = 'review' | 'plan' | 'referral' | 'appointment' | 'care';
 
@@ -54,4 +55,51 @@ export function formatPatientDateTime(value: string, language: Language): string
     timeZone: 'Asia/Dubai',
     numberingSystem: 'latn',
   }).format(new Date(value));
+}
+
+export function countUnreadNotifications(notifications: readonly Pick<NotificationDto, 'status' | 'acknowledgedAt'>[]): number {
+  return notifications.filter((notification) => notification.status === 'SENT' && notification.acknowledgedAt === null).length;
+}
+
+export function countUnreadNotificationsByCase(notifications: readonly Pick<NotificationDto, 'caseId' | 'status' | 'acknowledgedAt'>[]): Record<string, number> {
+  return notifications.reduce<Record<string, number>>((counts, notification) => {
+    if (notification.status === 'SENT' && notification.acknowledgedAt === null) counts[notification.caseId] = (counts[notification.caseId] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+export function isNotificationAcknowledgementEnabled(notification: Pick<NotificationDto, 'status' | 'acknowledgedAt'>, pending: boolean): boolean {
+  return notification.status === 'SENT' && notification.acknowledgedAt === null && !pending;
+}
+
+export function canConfirmUnderstanding(
+  explanation: { status: string; current: boolean } | null | undefined,
+  confirmedAt: string | null | undefined,
+  pending: boolean,
+): boolean {
+  return explanation?.status === 'APPROVED' && explanation.current && !confirmedAt && !pending;
+}
+
+export function canDeclineCare(state: CaseState, alreadyDeclined: boolean, pending: boolean): boolean {
+  return state !== 'CLOSED' && !alreadyDeclined && !pending;
+}
+
+export function canGrantConsent(hasActiveConsent: boolean, pending: boolean): boolean {
+  return !hasActiveConsent && !pending;
+}
+
+export function canRevokeConsent(hasActiveConsent: boolean, pending: boolean): boolean {
+  return hasActiveConsent && !pending;
+}
+
+/** Maps only stable API codes/statuses to patient-safe localized copy; raw server text is never used. */
+export function getPatientErrorMessageKey(code: ApiErrorCode | 'NETWORK_ERROR' | null, status: number): TranslationKey {
+  if (code === 'CONFLICT' || status === 409) return 'patient_errorConflict';
+  if (code === 'NOT_FOUND' || status === 404) return 'patient_errorNotFound';
+  if (code === 'FORBIDDEN' || code === 'CONSENT_REQUIRED' || status === 403) return 'patient_errorForbidden';
+  if (code === 'VALIDATION_ERROR' || code === 'INVALID_TRANSITION' || code === 'EVIDENCE_MISSING' || code === 'DELAY_REASON_REQUIRED' || status === 400 || status === 422) return 'patient_errorValidation';
+  if (code === 'UNAUTHENTICATED' || status === 401) return 'patient_errorUnauthenticated';
+  if (code === 'RATE_LIMITED' || status === 429) return 'patient_errorRateLimited';
+  if (code === 'NETWORK_ERROR' || status === 0) return 'patient_errorNetwork';
+  return 'patient_errorGeneric';
 }

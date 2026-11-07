@@ -16,7 +16,7 @@ import { useT } from '../../lib/i18n/context';
 import { ShellLayout } from '../../components/ShellLayout';
 import { ReviewNoticeBanner } from '../../components/ReviewNoticeBanner';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
-import { formatPatientDateTime, getPatientProgress } from '../../lib/patient-portal';
+import { countUnreadNotificationsByCase, formatPatientDateTime, getPatientProgress } from '../../lib/patient-portal';
 
 function PatientDashboard() {
   const { t, language } = useT();
@@ -45,12 +45,7 @@ function PatientDashboard() {
         ));
         if (isMounted) {
           setCases(details);
-          // The API has no per-notification read flag. SENT is the available proxy
-          // until acknowledgement state is exposed by the contract.
-          setUnreadByCase(notifications.items.reduce<Record<string, number>>((counts, item) => {
-            if (item.status === 'SENT') counts[item.caseId] = (counts[item.caseId] ?? 0) + 1;
-            return counts;
-          }, {}));
+          setUnreadByCase(countUnreadNotificationsByCase(notifications.items));
           setError(false);
         }
       } catch {
