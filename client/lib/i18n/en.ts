@@ -206,6 +206,20 @@ export const en = {
   reviewNotice_unreviewedText:
     'Machine-translated Arabic content has not been clinically reviewed.',
   reviewNotice_dismiss: 'Dismiss',
+  patient_event_CASE_RECEIVED: 'Screening case received',
+  patient_event_UNDER_REVIEW_COMPLETED: 'Review completed',
+  patient_event_UPDATE_SENT: 'Update sent',
+  patient_event_UPDATE_VIEWED: 'Update viewed',
+  patient_event_UNDERSTANDING_CONFIRMED: 'Explanation read confirmation recorded',
+  patient_event_CONSENT_GRANTED: 'Information-sharing consent granted',
+  patient_event_CONSENT_REVOKED: 'Information-sharing consent revoked',
+  patient_event_REFERRAL_STARTED: 'Referral started',
+  patient_event_REFERRAL_ACCEPTED: 'Referral accepted',
+  patient_event_APPOINTMENT_BOOKED: 'Appointment booked',
+  patient_event_APPOINTMENT_CHANGED: 'Appointment changed',
+  patient_event_CARE_STARTED: 'Care started',
+  patient_event_CASE_CLOSED: 'Case closed',
+  patient_event_CARE_DECLINED_RECORDED: 'Care decision recorded',
 } as const;
 
 export type TranslationKey = keyof typeof en;
