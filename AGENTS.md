@@ -209,7 +209,13 @@ Rules for every agent:
 9. Draft the matching `docs/` section as you finish each feature.
 10. End each task with: what changed, how to run it, what is untested, what is next.
 11. Before updating TASKS.md and the AGENTS.md logs at the end of a task, run `git merge main` into your branch and resolve any conflict in the logs by keeping all rows from both sides. Then update the logs and commit.
-
+12. Run each long command (build, test suite, docker rebuild) once, in the foreground, and WAIT for
+    it to finish in a single blocking call. Report its exit code and the last 20 lines. Do not loop,
+    poll, or re-run it to watch progress. If your tool cannot wait long enough, say so plainly and do
+    NOT claim the task is complete.
+13. Do not tick a task in TASKS.md. Write "ready for owner verification" and list the commands the owner
+    must run. The owner ticks tasks after verifying.
+    
 Code quality: validate every request with zod; consistent error format; no unnecessary abstractions; TypeScript strict; no `any` without a comment.
 
 ## 11. Documentation deliverables (`docs/`, written continuously)
